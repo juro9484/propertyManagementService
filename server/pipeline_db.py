@@ -285,6 +285,30 @@ def _run_pipeline_inner(county: str, run_id: int):
                     WHERE lead_id = %s AND folio = %s
                 """, [lat, lng, lead_id, folio])
 
+    # ── Step 3: Auto-enrich top leads via Apollo ────────────────────────────
+    apollo_key = os.environ.get("APOLLO_API_KEY", "")
+    leads_enriched = 0
+    if apollo_key:
+        from enrichment import enrich_with_apollo
+        # Only enrich leads that haven't been enriched yet
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT * FROM leads
+                WHERE county = %s AND enriched_at IS NULL
+                ORDER BY score DESC
+                LIMIT %s
+            """, [county, top_n])
+            unenriched = cur.fetchall()
+
+        print(f"[PIPELINE] Enriching {len(unenriched)} leads via Apollo")
+        for lead in unenriched:
+            result = enrich_with_apollo(dict(lead), apollo_key)
+            if result.get("enriched"):
+                leads_enriched += 1
+        print(f"[PIPELINE] Enriched {leads_enriched}/{len(unenriched)} leads")
+    else:
+        print("[PIPELINE] APOLLO_API_KEY not set — skipping enrichment")
+
     return {
         "run_id": run_id,
         "county": county,
@@ -292,6 +316,7 @@ def _run_pipeline_inner(county: str, run_id: int):
         "leads_scored": leads_scored,
         "new_owners_found": len(new_owner_folios),
         "addresses_geocoded": len(coord_map),
+        "leads_enriched": leads_enriched,
     }
 
 
