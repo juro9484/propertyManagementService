@@ -249,7 +249,7 @@ def _run_pipeline_inner(county: str, run_id: int):
             """, lead_rows, fetch=True)
 
             for row in result:
-                lead_id_map[row[1]] = row[0]
+                lead_id_map[row["owner_name"]] = row["id"]
 
             leads_scored += len(batch)
             print(f"[PIPELINE] Leads: {leads_scored}/{len(scored_in_memory)} upserted")
