@@ -104,6 +104,19 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
   error_message TEXT
 );
 
+-- ─── Users (app login) ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+  id            SERIAL PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  name          TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role          TEXT NOT NULL DEFAULT 'viewer'
+                CHECK (role IN ('admin', 'manager', 'viewer')),
+  active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_login    TIMESTAMPTZ
+);
+
 -- ─── Indexes ────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_properties_owner ON properties (owner_name);
 CREATE INDEX IF NOT EXISTS idx_properties_county ON properties (county);

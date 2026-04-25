@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, AlertCircle, Sun, Moon } from 'lucide-react'
+import { RefreshCw, AlertCircle, Sun, Moon, LogOut } from 'lucide-react'
 import KPICards from './components/KPICards'
 import LandlordTable from './components/LandlordTable'
 import RealtorTable from './components/RealtorTable'
 import PropertyMap from './components/PropertyMap'
 import OutreachModal from './components/OutreachModal'
+import LoginPage from './components/LoginPage'
 import { sampleLandlordData, sampleRealtorData } from './sampleData'
 
 const TABS = [
@@ -14,6 +15,10 @@ const TABS = [
 ]
 
 export default function App() {
+  const [user, setUser]                 = useState(() => {
+    try { return JSON.parse(localStorage.getItem('acpm_user')) } catch { return null }
+  })
+  const [token, setToken]               = useState(() => localStorage.getItem('acpm_token'))
   const [landlordData, setLandlordData] = useState(null)
   const [realtorData, setRealtorData]   = useState(null)
   const [loading, setLoading]           = useState(true)
@@ -28,11 +33,30 @@ export default function App() {
 
   const API_BASE = import.meta.env.VITE_API_URL || ''
 
+  const handleLogin = (userData, tokenStr) => {
+    setUser(userData)
+    setToken(tokenStr)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('acpm_token')
+    localStorage.removeItem('acpm_user')
+    setUser(null)
+    setToken(null)
+  }
+
+  // Not logged in → show login page
+  if (!user || !token) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
   const loadData = async () => {
     setLoading(true)
     try {
       // Try API first (FastAPI server running)
-      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`)
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`, { headers })
+      if (apiRes.status === 401) { handleLogout(); return }
       if (apiRes.ok) {
         const apiData = await apiRes.json()
         // Reshape API response to match existing frontend format
@@ -136,6 +160,11 @@ export default function App() {
             <button onClick={loadData} disabled={loading} className="btn-ghost text-xs">
               <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
               Refresh
+            </button>
+            <span style={{ color: 'var(--bd)' }}>|</span>
+            <span style={{ fontSize: '11px', color: 'var(--tx-4)' }}>{user?.name}</span>
+            <button onClick={handleLogout} className="btn-ghost text-xs" title="Sign out">
+              <LogOut size={11} />
             </button>
           </div>
         </div>

@@ -29,6 +29,10 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 
 from db import get_cursor, init_db
+from auth import (
+    get_current_user, login, create_user, seed_admin,
+    LoginRequest, CreateUserRequest,
+)
 
 app = FastAPI(title="All County Lead Gen API", version="1.0.0")
 
@@ -37,6 +41,7 @@ app.add_middleware(
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # ── Serve built frontend in production ────────────────────────────────────────
@@ -46,12 +51,54 @@ DIST_DIR = Path(__file__).parent.parent / "dist"
 @app.on_event("startup")
 def startup():
     init_db()
-    # Mount static assets if frontend build exists (production)
+    seed_admin()
     if (DIST_DIR / "index.html").exists():
         app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
-        # Serve static files from public/ (logo, data files)
         if (DIST_DIR / "data").exists():
             app.mount("/data", StaticFiles(directory=DIST_DIR / "data"), name="data")
+
+
+# ── Auth middleware ───────────────────────────────────────────────────────────
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Skip auth for: login endpoint, static files, docs
+    if (path == "/api/auth/login" or
+        not path.startswith("/api/") or
+        path in ("/docs", "/openapi.json", "/redoc")):
+        return await call_next(request)
+
+    # Validate JWT
+    try:
+        user = get_current_user(request)
+        request.state.user = user
+    except HTTPException as e:
+        from starlette.responses import JSONResponse
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+    return await call_next(request)
+
+
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+@app.post("/api/auth/login")
+def auth_login(body: LoginRequest):
+    return login(body.email, body.password)
+
+@app.post("/api/auth/users")
+def auth_create_user(body: CreateUserRequest, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    return create_user(body.email, body.name, body.password, body.role)
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(401, "Not authenticated")
+    return user
 
 
 
