@@ -6,12 +6,14 @@ import RealtorTable from './components/RealtorTable'
 import PropertyMap from './components/PropertyMap'
 import OutreachModal from './components/OutreachModal'
 import LoginPage from './components/LoginPage'
+import UserManagement from './components/UserManagement'
 import { sampleLandlordData, sampleRealtorData } from './sampleData'
 
 const TABS = [
   { label: 'Investor Landlords' },
   { label: 'Realtor Prospects'  },
   { label: 'Property Map'       },
+  { label: 'Settings', adminOnly: true },
 ]
 
 export default function App() {
@@ -33,9 +35,9 @@ export default function App() {
 
   const API_BASE = import.meta.env.VITE_API_URL || ''
 
-  const handleLogin = (userData, tokenStr) => {
-    setUser(userData)
-    setToken(tokenStr)
+  const getAuthHeaders = () => {
+    const t = localStorage.getItem('acpm_token')
+    return t ? { Authorization: `Bearer ${t}` } : {}
   }
 
   const handleLogout = () => {
@@ -45,21 +47,13 @@ export default function App() {
     setToken(null)
   }
 
-  // Not logged in → show login page
-  if (!user || !token) {
-    return <LoginPage onLogin={handleLogin} />
-  }
-
   const loadData = async () => {
     setLoading(true)
     try {
-      // Try API first (FastAPI server running)
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`, { headers })
+      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`, { headers: getAuthHeaders() })
       if (apiRes.status === 401) { handleLogout(); return }
       if (apiRes.ok) {
         const apiData = await apiRes.json()
-        // Reshape API response to match existing frontend format
         setLandlordData({
           generated_at: new Date().toISOString(),
           total_records_processed: apiData.total,
@@ -69,7 +63,6 @@ export default function App() {
             : 0,
           leads: apiData.leads.map((l, i) => ({ ...l, rank: i + 1, folio: l.primary_folio || l.id })),
         })
-        // Realtors still from static JSON for now
         try {
           const rRes = await fetch(`/data/realtor_leads.json?t=${Date.now()}`)
           if (rRes.ok) setRealtorData(await rRes.json())
@@ -81,7 +74,6 @@ export default function App() {
       }
     } catch { /* API not available, fall through */ }
 
-    // Fallback: static JSON files
     try {
       const [lRes, rRes] = await Promise.all([
         fetch(`/data/landlord_leads.json?t=${Date.now()}`),
@@ -101,7 +93,18 @@ export default function App() {
     }
   }
 
-  useEffect(() => { if (token) loadData() }, [token])
+  const handleLogin = (userData, tokenStr) => {
+    setUser(userData)
+    setToken(tokenStr)
+    loadData()  // token is already in localStorage at this point
+  }
+
+  // Not logged in → show login page
+  if (!user || !token) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
+  useEffect(() => { loadData() }, [])
 
   const leads    = landlordData?.leads   ?? []
   const realtors = realtorData?.realtors ?? []
@@ -194,36 +197,41 @@ export default function App() {
 
         {/* ── Tabs ── */}
         <div style={{ borderBottom: '1px solid var(--bd)', display: 'flex' }}>
-          {TABS.map((tab, i) => (
-            <button
-              key={tab.label}
-              onClick={() => setActiveTab(i)}
-              style={{
-                padding: '10px 20px',
-                fontSize: '13px',
-                fontWeight: 500,
-                marginBottom: '-1px',
-                color: activeTab === i ? 'var(--tx-1)' : 'var(--tx-3)',
-                background: 'none',
-                border: 'none',
-                borderBottom: `2px solid ${activeTab === i ? 'var(--gold)' : 'transparent'}`,
-                cursor: 'pointer',
-              }}
-            >
-              {tab.label}
-              <span style={{
-                marginLeft: '8px',
-                fontSize: '11px',
-                padding: '1px 6px',
-                borderRadius: '3px',
-                fontWeight: 600,
-                backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
-                color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
-              }}>
-                {i === 0 ? leads.length : i === 1 ? realtors.length : leads.length}
-              </span>
-            </button>
-          ))}
+          {TABS.map((tab, i) => {
+            if (tab.adminOnly && user?.role !== 'admin') return null
+            return (
+              <button
+                key={tab.label}
+                onClick={() => setActiveTab(i)}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  marginBottom: '-1px',
+                  color: activeTab === i ? 'var(--tx-1)' : 'var(--tx-3)',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: `2px solid ${activeTab === i ? 'var(--gold)' : 'transparent'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {tab.label}
+                {!tab.adminOnly && (
+                  <span style={{
+                    marginLeft: '8px',
+                    fontSize: '11px',
+                    padding: '1px 6px',
+                    borderRadius: '3px',
+                    fontWeight: 600,
+                    backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
+                    color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
+                  }}>
+                    {i === 0 ? leads.length : i === 1 ? realtors.length : leads.length}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
 
         {loading ? (
@@ -243,6 +251,9 @@ export default function App() {
             )}
             {activeTab === 2 && (
               <PropertyMap leads={leads} theme={theme} />
+            )}
+            {activeTab === 3 && user?.role === 'admin' && (
+              <UserManagement />
             )}
           </>
         )}

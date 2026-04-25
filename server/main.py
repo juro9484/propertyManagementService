@@ -86,6 +86,15 @@ async def auth_middleware(request: Request, call_next):
 def auth_login(body: LoginRequest):
     return login(body.email, body.password)
 
+@app.get("/api/auth/users")
+def auth_list_users(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    with get_cursor() as cur:
+        cur.execute("SELECT id, email, name, role, active, created_at, last_login FROM users ORDER BY created_at")
+        return cur.fetchall()
+
 @app.post("/api/auth/users")
 def auth_create_user(body: CreateUserRequest, request: Request):
     user = getattr(request.state, "user", None)
