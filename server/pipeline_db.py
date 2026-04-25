@@ -285,11 +285,11 @@ def _run_pipeline_inner(county: str, run_id: int):
                     WHERE lead_id = %s AND folio = %s
                 """, [lat, lng, lead_id, folio])
 
-    # ── Step 3: Auto-enrich top leads via Apollo ────────────────────────────
-    apollo_key = os.environ.get("APOLLO_API_KEY", "")
+    # ── Step 3: Auto-enrich top leads via Tracerfy skip tracing ─────────────
+    tracerfy_key = os.environ.get("TRACERFY_API_KEY", "")
     leads_enriched = 0
-    if apollo_key:
-        from enrichment import enrich_with_apollo
+    if tracerfy_key:
+        from enrichment import enrich_lead as tracerfy_enrich
         # Only enrich leads that haven't been enriched yet
         with get_cursor() as cur:
             cur.execute("""
@@ -300,14 +300,14 @@ def _run_pipeline_inner(county: str, run_id: int):
             """, [county, top_n])
             unenriched = cur.fetchall()
 
-        print(f"[PIPELINE] Enriching {len(unenriched)} leads via Apollo")
+        print(f"[PIPELINE] Skip-tracing {len(unenriched)} leads via Tracerfy")
         for lead in unenriched:
-            result = enrich_with_apollo(dict(lead), apollo_key)
+            result = tracerfy_enrich(dict(lead), tracerfy_key)
             if result.get("enriched"):
                 leads_enriched += 1
         print(f"[PIPELINE] Enriched {leads_enriched}/{len(unenriched)} leads")
     else:
-        print("[PIPELINE] APOLLO_API_KEY not set — skipping enrichment")
+        print("[PIPELINE] TRACERFY_API_KEY not set — skipping enrichment")
 
     return {
         "run_id": run_id,

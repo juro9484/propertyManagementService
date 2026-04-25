@@ -279,11 +279,11 @@ def pipeline_runs():
 # ── Enrichment (Apollo) ──────────────────────────────────────────────────────
 
 @app.post("/api/leads/{lead_id}/enrich")
-def enrich_lead(lead_id: int):
-    """Enrich a single lead with Apollo.io contact data."""
-    api_key = os.getenv("APOLLO_API_KEY")
+def enrich_lead_endpoint(lead_id: int):
+    """Skip-trace a single lead via Tracerfy — returns email + phone."""
+    api_key = os.getenv("TRACERFY_API_KEY")
     if not api_key:
-        raise HTTPException(501, "APOLLO_API_KEY not configured")
+        raise HTTPException(501, "TRACERFY_API_KEY not configured")
 
     with get_cursor() as cur:
         cur.execute("SELECT * FROM leads WHERE id = %s", [lead_id])
@@ -291,8 +291,8 @@ def enrich_lead(lead_id: int):
         if not lead:
             raise HTTPException(404, "Lead not found")
 
-    from enrichment import enrich_with_apollo
-    result = enrich_with_apollo(lead, api_key)
+    from enrichment import enrich_lead
+    result = enrich_lead(dict(lead), api_key)
     return result
 
 
