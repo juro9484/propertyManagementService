@@ -231,7 +231,7 @@ def _run_pipeline_inner(county: str, run_id: int):
             result = execute_values(cur, """
                 INSERT INTO leads (owner_name, county, score, badges, score_breakdown,
                     primary_folio, property_address, city, mailing_address, mailing_city,
-                    mailing_state, mailing_zip, property_count, status)
+                    mailing_state, mailing_zip, property_count)
                 VALUES %s
                 ON CONFLICT (owner_name, county) DO UPDATE SET
                     score = EXCLUDED.score,
