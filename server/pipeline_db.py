@@ -7,6 +7,7 @@ Called by the /api/pipeline/run endpoint or by the daily cron scheduler.
 
 import csv
 import io
+import os
 import re
 import urllib.request
 from datetime import datetime
@@ -183,20 +184,10 @@ def _run_pipeline_inner(county: str, run_id: int):
         if owner:
             by_owner[owner].append(rec)
 
-    # Collect addresses for batch geocoding
-    addr_set = set()
-    for owner_name, recs in by_owner.items():
-        for r in recs:
-            addr = base_addr(build_address(r))
-            city = r.get("city", "").strip()
-            if addr and city:
-                addr_set.add((addr, city))
-
-    coord_map = geocode_addresses(list(addr_set))
-    print(f"[PIPELINE] Geocoded {len(coord_map)}/{len(addr_set)} unique addresses")
-
-    # Score leads and upsert
+    # ── Step 1: Score ALL leads and upsert (no geocoding yet) ────────────────
     leads_scored = 0
+    scored_leads = []  # [(owner_name, score, recs), ...] for sorting
+
     for owner_name, recs in by_owner.items():
         primary = recs[0]
         prop_count = len(recs)
@@ -216,11 +207,8 @@ def _run_pipeline_inner(county: str, run_id: int):
         full_mail = f"{mail_addr1}, {mail_city}, {mail_state} {mail_zip}".strip(", ")
 
         prop_address = build_address(primary)
-        primary_addr_key = f"{base_addr(prop_address)}|{prop_city}"
-        primary_coords = coord_map.get(primary_addr_key)
 
         with get_cursor(commit=True) as cur:
-            # Upsert lead
             cur.execute("""
                 INSERT INTO leads (owner_name, county, score, badges, score_breakdown,
                     primary_folio, property_address, city, mailing_address, mailing_city,
@@ -247,7 +235,7 @@ def _run_pipeline_inner(county: str, run_id: int):
             ])
             lead_id = cur.fetchone()["id"]
 
-            # Replace lead_properties
+            # Insert lead_properties (without coords for now)
             cur.execute("DELETE FROM lead_properties WHERE lead_id = %s", [lead_id])
             for r in recs:
                 r_folio = r.get("folio", "").strip()
@@ -255,19 +243,47 @@ def _run_pipeline_inner(county: str, run_id: int):
                     continue
                 addr = build_address(r)
                 city = r.get("city", "").strip()
-                addr_key = f"{base_addr(addr)}|{city}"
-                coords = coord_map.get(addr_key)
                 cur.execute("""
-                    INSERT INTO lead_properties (lead_id, folio, county, address, city, lat, lng)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO lead_properties (lead_id, folio, county, address, city)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
-                """, [
-                    lead_id, r_folio, county, addr, city,
-                    coords[0] if coords else None,
-                    coords[1] if coords else None,
-                ])
+                """, [lead_id, r_folio, county, addr, city])
 
+        scored_leads.append((owner_name, score, lead_id, recs))
         leads_scored += 1
+
+    # ── Step 2: Geocode only top 50 leads' properties ─────────────────────
+    top_n = int(os.environ.get("TOP_LEADS_COUNT", "50"))
+    scored_leads.sort(key=lambda x: x[1], reverse=True)
+    top_leads = scored_leads[:top_n]
+
+    addr_set = set()
+    addr_to_lead_props = {}  # addr_key → [(lead_id, folio), ...]
+    for owner_name, score, lead_id, recs in top_leads:
+        for r in recs:
+            r_folio = r.get("folio", "").strip()
+            if not r_folio:
+                continue
+            addr = base_addr(build_address(r))
+            city = r.get("city", "").strip()
+            if addr and city:
+                key = f"{addr}|{city}"
+                addr_set.add((addr, city))
+                addr_to_lead_props.setdefault(key, []).append((lead_id, r_folio))
+
+    print(f"[PIPELINE] Geocoding {len(addr_set)} addresses for top {len(top_leads)} leads")
+    coord_map = geocode_addresses(list(addr_set))
+    print(f"[PIPELINE] Geocoded {len(coord_map)}/{len(addr_set)} addresses")
+
+    # Stamp coords onto lead_properties for top leads
+    for key, coords in coord_map.items():
+        lat, lng = coords
+        for lead_id, folio in addr_to_lead_props.get(key, []):
+            with get_cursor(commit=True) as cur:
+                cur.execute("""
+                    UPDATE lead_properties SET lat = %s, lng = %s
+                    WHERE lead_id = %s AND folio = %s
+                """, [lat, lng, lead_id, folio])
 
     return {
         "run_id": run_id,
