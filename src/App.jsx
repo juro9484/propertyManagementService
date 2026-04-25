@@ -101,7 +101,7 @@ export default function App() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { if (token) loadData() }, [token])
 
   const leads    = landlordData?.leads   ?? []
   const realtors = realtorData?.realtors ?? []
