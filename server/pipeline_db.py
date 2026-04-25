@@ -396,11 +396,13 @@ def _upsert_properties(records, county):
     """Bulk upsert raw property records using batch inserts."""
     from psycopg2.extras import execute_values
 
+    seen = set()
     rows = []
     for rec in records:
         folio = rec.get("folio", "").strip()
-        if not folio:
+        if not folio or folio in seen:
             continue
+        seen.add(folio)
         rows.append((
             folio, county,
             rec.get("owner_name", ""),
