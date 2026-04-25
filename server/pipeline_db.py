@@ -184,9 +184,11 @@ def _run_pipeline_inner(county: str, run_id: int):
         if owner:
             by_owner[owner].append(rec)
 
-    # ── Step 1: Score ALL leads and upsert (no geocoding yet) ────────────────
-    leads_scored = 0
-    scored_leads = []  # [(owner_name, score, recs), ...] for sorting
+    # ── Step 1: Score ALL leads in memory, then batch upsert ─────────────────
+    import json as json_mod
+    from psycopg2.extras import execute_values
+
+    scored_in_memory = []  # [(owner_name, score, lead_row_tuple, recs), ...]
 
     for owner_name, recs in by_owner.items():
         primary = recs[0]
@@ -205,19 +207,36 @@ def _run_pipeline_inner(county: str, run_id: int):
         mail_addr1 = primary.get("mailingAddr1", "")
         mail_zip = primary.get("mailingZip", "")
         full_mail = f"{mail_addr1}, {mail_city}, {mail_state} {mail_zip}".strip(", ")
-
         prop_address = build_address(primary)
 
-        with get_cursor(commit=True) as cur:
-            cur.execute("""
+        lead_row = (
+            owner_name, county, score, badges,
+            json_mod.dumps(breakdown),
+            folio, prop_address, prop_city, full_mail,
+            mail_city, mail_state, mail_zip, prop_count,
+        )
+        scored_in_memory.append((owner_name, score, lead_row, recs))
+
+    print(f"[PIPELINE] Scored {len(scored_in_memory)} owners in memory")
+
+    # Batch upsert leads
+    BATCH = 2000
+    lead_id_map = {}  # owner_name → lead_id
+    leads_scored = 0
+
+    with get_cursor(commit=True) as cur:
+        for i in range(0, len(scored_in_memory), BATCH):
+            batch = scored_in_memory[i:i+BATCH]
+            lead_rows = [item[2] for item in batch]
+            result = execute_values(cur, """
                 INSERT INTO leads (owner_name, county, score, badges, score_breakdown,
                     primary_folio, property_address, city, mailing_address, mailing_city,
                     mailing_state, mailing_zip, property_count, status)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, 'new')
+                VALUES %s
                 ON CONFLICT (owner_name, county) DO UPDATE SET
                     score = EXCLUDED.score,
                     badges = EXCLUDED.badges,
-                    score_breakdown = EXCLUDED.score_breakdown,
+                    score_breakdown = EXCLUDED.score_breakdown::jsonb,
                     property_address = EXCLUDED.property_address,
                     city = EXCLUDED.city,
                     mailing_address = EXCLUDED.mailing_address,
@@ -226,31 +245,49 @@ def _run_pipeline_inner(county: str, run_id: int):
                     mailing_zip = EXCLUDED.mailing_zip,
                     property_count = EXCLUDED.property_count,
                     updated_at = NOW()
-                RETURNING id
-            """, [
-                owner_name, county, score, badges,
-                __import__("json").dumps(breakdown),
-                folio, prop_address, prop_city, full_mail,
-                mail_city, mail_state, mail_zip, prop_count,
-            ])
-            lead_id = cur.fetchone()["id"]
+                RETURNING id, owner_name
+            """, lead_rows, fetch=True)
 
-            # Insert lead_properties (without coords for now)
-            cur.execute("DELETE FROM lead_properties WHERE lead_id = %s", [lead_id])
-            for r in recs:
-                r_folio = r.get("folio", "").strip()
-                if not r_folio:
-                    continue
-                addr = build_address(r)
-                city = r.get("city", "").strip()
-                cur.execute("""
-                    INSERT INTO lead_properties (lead_id, folio, county, address, city)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
-                """, [lead_id, r_folio, county, addr, city])
+            for row in result:
+                lead_id_map[row[1]] = row[0]
 
-        scored_leads.append((owner_name, score, lead_id, recs))
-        leads_scored += 1
+            leads_scored += len(batch)
+            print(f"[PIPELINE] Leads: {leads_scored}/{len(scored_in_memory)} upserted")
+
+    # Batch upsert lead_properties for all leads
+    print("[PIPELINE] Upserting lead_properties...")
+    prop_rows = []
+    for owner_name, score, lead_row, recs in scored_in_memory:
+        lead_id = lead_id_map.get(owner_name)
+        if not lead_id:
+            continue
+        for r in recs:
+            r_folio = r.get("folio", "").strip()
+            if not r_folio:
+                continue
+            prop_rows.append((lead_id, r_folio, county, build_address(r), r.get("city", "").strip()))
+
+    with get_cursor(commit=True) as cur:
+        # Clear old lead_properties for this county's leads
+        cur.execute("""
+            DELETE FROM lead_properties WHERE lead_id IN (
+                SELECT id FROM leads WHERE county = %s
+            )
+        """, [county])
+
+        for i in range(0, len(prop_rows), BATCH):
+            batch = prop_rows[i:i+BATCH]
+            execute_values(cur, """
+                INSERT INTO lead_properties (lead_id, folio, county, address, city)
+                VALUES %s
+                ON CONFLICT DO NOTHING
+            """, batch)
+        print(f"[PIPELINE] Lead properties: {len(prop_rows)} upserted")
+
+    # Build scored_leads list for geocoding/enrichment steps
+    scored_leads = [(owner, score, lead_id_map.get(owner), recs)
+                    for owner, score, _, recs in scored_in_memory
+                    if lead_id_map.get(owner)]
 
     # ── Step 2: Geocode top 50 leads' properties (map pins) ─────────────────
     scored_leads.sort(key=lambda x: x[1], reverse=True)
@@ -356,17 +393,36 @@ def _detect_new_owners_from_db(records, county):
 
 
 def _upsert_properties(records, county):
-    """Bulk upsert raw property records."""
+    """Bulk upsert raw property records using batch inserts."""
+    from psycopg2.extras import execute_values
+
+    rows = []
+    for rec in records:
+        folio = rec.get("folio", "").strip()
+        if not folio:
+            continue
+        rows.append((
+            folio, county,
+            rec.get("owner_name", ""),
+            build_address(rec),
+            rec.get("city", ""),
+            rec.get("mailingAddr1", ""),
+            rec.get("mailingCity", ""),
+            rec.get("mailingState", ""),
+            rec.get("mailingZip", ""),
+            rec.get("account_type", ""),
+            rec.get("taxArea", ""),
+        ))
+
+    BATCH = 5000
     with get_cursor(commit=True) as cur:
-        for rec in records:
-            folio = rec.get("folio", "")
-            if not folio:
-                continue
-            cur.execute("""
+        for i in range(0, len(rows), BATCH):
+            batch = rows[i:i+BATCH]
+            execute_values(cur, """
                 INSERT INTO properties (folio, county, owner_name, property_address, city,
                     mailing_address, mailing_city, mailing_state, mailing_zip,
                     account_type, tax_area)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES %s
                 ON CONFLICT (folio, county) DO UPDATE SET
                     owner_name = EXCLUDED.owner_name,
                     property_address = EXCLUDED.property_address,
@@ -378,15 +434,5 @@ def _upsert_properties(records, county):
                     account_type = EXCLUDED.account_type,
                     tax_area = EXCLUDED.tax_area,
                     last_seen = CURRENT_DATE
-            """, [
-                folio, county,
-                rec.get("owner_name", ""),
-                build_address(rec),
-                rec.get("city", ""),
-                rec.get("mailingAddr1", ""),
-                rec.get("mailingCity", ""),
-                rec.get("mailingState", ""),
-                rec.get("mailingZip", ""),
-                rec.get("account_type", ""),
-                rec.get("taxArea", ""),
-            ])
+            """, batch)
+            print(f"[PIPELINE] Properties: {min(i+BATCH, len(rows))}/{len(rows)} upserted")
