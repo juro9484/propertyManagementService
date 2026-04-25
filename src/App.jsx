@@ -32,7 +32,7 @@ export default function App() {
     setLoading(true)
     try {
       // Try API first (FastAPI server running)
-      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=50&sort=score_desc`)
+      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`)
       if (apiRes.ok) {
         const apiData = await apiRes.json()
         // Reshape API response to match existing frontend format

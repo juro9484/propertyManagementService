@@ -252,14 +252,13 @@ def _run_pipeline_inner(county: str, run_id: int):
         scored_leads.append((owner_name, score, lead_id, recs))
         leads_scored += 1
 
-    # ── Step 2: Geocode only top 50 leads' properties ─────────────────────
-    top_n = int(os.environ.get("TOP_LEADS_COUNT", "50"))
+    # ── Step 2: Geocode top 50 leads' properties (map pins) ─────────────────
     scored_leads.sort(key=lambda x: x[1], reverse=True)
-    top_leads = scored_leads[:top_n]
+    map_leads = scored_leads[:50]
 
     addr_set = set()
-    addr_to_lead_props = {}  # addr_key → [(lead_id, folio), ...]
-    for owner_name, score, lead_id, recs in top_leads:
+    addr_to_lead_props = {}
+    for owner_name, score, lead_id, recs in map_leads:
         for r in recs:
             r_folio = r.get("folio", "").strip()
             if not r_folio:
@@ -271,11 +270,10 @@ def _run_pipeline_inner(county: str, run_id: int):
                 addr_set.add((addr, city))
                 addr_to_lead_props.setdefault(key, []).append((lead_id, r_folio))
 
-    print(f"[PIPELINE] Geocoding {len(addr_set)} addresses for top {len(top_leads)} leads")
+    print(f"[PIPELINE] Geocoding {len(addr_set)} addresses for top 50 map leads")
     coord_map = geocode_addresses(list(addr_set))
     print(f"[PIPELINE] Geocoded {len(coord_map)}/{len(addr_set)} addresses")
 
-    # Stamp coords onto lead_properties for top leads
     for key, coords in coord_map.items():
         lat, lng = coords
         for lead_id, folio in addr_to_lead_props.get(key, []):
@@ -285,19 +283,19 @@ def _run_pipeline_inner(county: str, run_id: int):
                     WHERE lead_id = %s AND folio = %s
                 """, [lat, lng, lead_id, folio])
 
-    # ── Step 3: Auto-enrich top leads via Tracerfy skip tracing ─────────────
+    # ── Step 3: Skip-trace top 200 leads (all displayed leads get contact info)
+    enrich_n = int(os.environ.get("TOP_LEADS_COUNT", "200"))
     tracerfy_key = os.environ.get("TRACERFY_API_KEY", "")
     leads_enriched = 0
     if tracerfy_key:
         from enrichment import enrich_lead as tracerfy_enrich
-        # Only enrich leads that haven't been enriched yet
         with get_cursor() as cur:
             cur.execute("""
                 SELECT * FROM leads
                 WHERE county = %s AND enriched_at IS NULL
                 ORDER BY score DESC
                 LIMIT %s
-            """, [county, top_n])
+            """, [county, enrich_n])
             unenriched = cur.fetchall()
 
         print(f"[PIPELINE] Skip-tracing {len(unenriched)} leads via Tracerfy")
