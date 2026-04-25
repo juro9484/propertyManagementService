@@ -96,15 +96,17 @@ export default function App() {
   const handleLogin = (userData, tokenStr) => {
     setUser(userData)
     setToken(tokenStr)
-    loadData()  // token is already in localStorage at this point
   }
+
+  // Load data whenever token changes (including after login)
+  useEffect(() => {
+    if (token) loadData()
+  }, [token])
 
   // Not logged in → show login page
   if (!user || !token) {
     return <LoginPage onLogin={handleLogin} />
   }
-
-  useEffect(() => { loadData() }, [])
 
   const leads    = landlordData?.leads   ?? []
   const realtors = realtorData?.realtors ?? []
