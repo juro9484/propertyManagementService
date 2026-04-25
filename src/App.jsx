@@ -24,7 +24,7 @@ export default function App() {
   const [usingMock, setUsingMock]       = useState(false)
   const [activeTab, setActiveTab]       = useState(0)
   const [modal, setModal]               = useState(null)
-  const [theme, setTheme]               = useState('dark')
+  const [theme, setTheme]               = useState('light')
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
