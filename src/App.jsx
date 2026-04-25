@@ -2,17 +2,15 @@ import { useState, useEffect } from 'react'
 import { RefreshCw, AlertCircle, Sun, Moon, LogOut } from 'lucide-react'
 import KPICards from './components/KPICards'
 import LandlordTable from './components/LandlordTable'
-import RealtorTable from './components/RealtorTable'
 import PropertyMap from './components/PropertyMap'
 import OutreachModal from './components/OutreachModal'
 import LoginPage from './components/LoginPage'
 import UserManagement from './components/UserManagement'
-import { sampleLandlordData, sampleRealtorData } from './sampleData'
+import { sampleLandlordData } from './sampleData'
 
 const TABS = [
-  { label: 'Investor Landlords' },
-  { label: 'Realtor Prospects'  },
-  { label: 'Property Map'       },
+  { label: 'Leads' },
+  { label: 'Property Map' },
   { label: 'Settings', adminOnly: true },
 ]
 
@@ -22,7 +20,6 @@ export default function App() {
   })
   const [token, setToken]               = useState(() => localStorage.getItem('acpm_token'))
   const [landlordData, setLandlordData] = useState(null)
-  const [realtorData, setRealtorData]   = useState(null)
   const [loading, setLoading]           = useState(true)
   const [usingMock, setUsingMock]       = useState(false)
   const [activeTab, setActiveTab]       = useState(0)
@@ -63,11 +60,6 @@ export default function App() {
             : 0,
           leads: apiData.leads.map((l, i) => ({ ...l, rank: i + 1, folio: l.primary_folio || l.id })),
         })
-        try {
-          const rRes = await fetch(`/data/realtor_leads.json?t=${Date.now()}`)
-          if (rRes.ok) setRealtorData(await rRes.json())
-          else setRealtorData(sampleRealtorData)
-        } catch { setRealtorData(sampleRealtorData) }
         setUsingMock(false)
         setLoading(false)
         return
@@ -75,18 +67,12 @@ export default function App() {
     } catch { /* API not available, fall through */ }
 
     try {
-      const [lRes, rRes] = await Promise.all([
-        fetch(`/data/landlord_leads.json?t=${Date.now()}`),
-        fetch(`/data/realtor_leads.json?t=${Date.now()}`),
-      ])
-      if (!lRes.ok || !rRes.ok) throw new Error('Not found')
-      const [lData, rData] = await Promise.all([lRes.json(), rRes.json()])
-      setLandlordData(lData)
-      setRealtorData(rData)
+      const lRes = await fetch(`/data/landlord_leads.json?t=${Date.now()}`)
+      if (!lRes.ok) throw new Error('Not found')
+      setLandlordData(await lRes.json())
       setUsingMock(false)
     } catch {
       setLandlordData(sampleLandlordData)
-      setRealtorData(sampleRealtorData)
       setUsingMock(true)
     } finally {
       setLoading(false)
@@ -108,8 +94,8 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  const leads    = landlordData?.leads   ?? []
-  const realtors = realtorData?.realtors ?? []
+  const leads    = landlordData?.leads ?? []
+  const enrichedCount = leads.filter(l => l.email || l.phone).length
   const newOwnerCount = leads.filter(l => l.badges?.includes('NEW_OWNER')).length
   const avgScore = leads.length
     ? (leads.reduce((s, l) => s + l.score, 0) / leads.length).toFixed(1)
@@ -192,7 +178,7 @@ export default function App() {
         <KPICards
           totalLandlords={leads.length}
           newOwnerEvents={newOwnerCount}
-          totalRealtors={realtors.length}
+          totalRealtors={enrichedCount}
           avgScore={Number(avgScore)}
           loading={loading}
         />
@@ -228,7 +214,7 @@ export default function App() {
                     backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
                     color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
                   }}>
-                    {i === 0 ? leads.length : i === 1 ? realtors.length : leads.length}
+                    {i === 0 ? leads.length : leads.length}
                   </span>
                 )}
               </button>
@@ -249,12 +235,9 @@ export default function App() {
               <LandlordTable leads={leads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} />
             )}
             {activeTab === 1 && (
-              <RealtorTable realtors={realtors} onOutreach={r => setModal({ lead: r, type: 'realtor' })} />
-            )}
-            {activeTab === 2 && (
               <PropertyMap leads={leads} theme={theme} />
             )}
-            {activeTab === 3 && user?.role === 'admin' && (
+            {activeTab === 2 && user?.role === 'admin' && (
               <UserManagement />
             )}
           </>

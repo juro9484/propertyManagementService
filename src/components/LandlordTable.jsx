@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Mail, MapPin, Home, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Mail, MapPin, Home, Search, ChevronDown, ChevronUp, Phone } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 
@@ -141,6 +141,11 @@ function LeadCard({ lead, selected, statuses, onSelect, onStatusChange }) {
           <div style={{ fontSize: '11px', color: 'var(--tx-4)', marginTop: '2px' }}>
             {lead.city}{lead.property_count > 1 ? ` · ${lead.property_count} props` : ''}
           </div>
+          {lead.email && (
+            <div style={{ fontSize: '10px', color: 'var(--b-green-tx)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lead.email}
+            </div>
+          )}
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
@@ -148,7 +153,7 @@ function LeadCard({ lead, selected, statuses, onSelect, onStatusChange }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
         {lead.badges?.slice(0, 3).map(b => <Badge key={b} type={b} />)}
         <button
           onClick={e => { e.stopPropagation(); onStatusChange(lead.folio, nextStatus) }}
@@ -249,6 +254,26 @@ function DetailPanel({ lead, onOutreach }) {
               Record Details
             </p>
             <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {lead.email && (
+                <div>
+                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
+                    <Mail size={9} /> Email
+                  </dt>
+                  <dd style={{ fontSize: '11px', color: 'var(--b-green-tx)', margin: 0 }}>
+                    <a href={`mailto:${lead.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{lead.email}</a>
+                  </dd>
+                </div>
+              )}
+              {lead.phone && (
+                <div>
+                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
+                    <Phone size={9} /> Phone
+                  </dt>
+                  <dd style={{ fontSize: '11px', color: 'var(--b-blue-tx)', margin: 0 }}>
+                    <a href={`tel:${lead.phone}`} style={{ color: 'inherit', textDecoration: 'none' }}>{lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}</a>
+                  </dd>
+                </div>
+              )}
               {lead.mailing_address && (
                 <div>
                   <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
@@ -270,12 +295,6 @@ function DetailPanel({ lead, onOutreach }) {
                       {lead.mailing_state}
                     </span>
                   </dd>
-                </div>
-              )}
-              {lead.tax_area && (
-                <div>
-                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', marginBottom: '2px' }}>Tax Area</dt>
-                  <dd style={{ fontSize: '11px', color: 'var(--tx-2)', margin: 0 }}>{lead.tax_area}</dd>
                 </div>
               )}
             </dl>

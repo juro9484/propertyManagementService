@@ -147,6 +147,7 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
   const [copied, setCopied]         = useState(false)
   const [currentIdx, setCurrentIdx] = useState(null)
   const [sendMode, setSendMode]     = useState(false)
+  const [generating, setGenerating] = useState(false)
   // verify: null | 'checking' | { deliverability, line1, city, state, zip } | 'error'
   const [verify, setVerify]         = useState(null)
   const [verifyError, setVerifyError] = useState('')
@@ -155,18 +156,46 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
   const [sendError, setSendError]   = useState('')
   const textareaRef = useRef(null)
 
+  const getAuthHeaders = () => {
+    const t = localStorage.getItem('acpm_token')
+    return t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+  }
+
   useEffect(() => {
     if (!isRealtor && allLeads)
       setCurrentIdx(allLeads.findIndex(l => l.folio === lead.folio))
   }, [lead, allLeads, isRealtor])
 
   useEffect(() => {
-    setEmail(isRealtor
-      ? (lead.outreach_email ?? generateRealtorEmail(lead))
-      : generateLandlordEmail(lead)
-    )
+    // Start with empty — user clicks Generate to create AI email
+    setEmail('')
     setCopied(false)
+    setGenerating(false)
   }, [lead, type])
+
+  const handleGenerate = async (tone = 'professional') => {
+    setGenerating(true)
+    try {
+      const res = await fetch(`${API_BASE}/outreach/generate`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ lead_id: lead.id, tone }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        // Fall back to static template if AI is unavailable
+        setEmail(isRealtor ? generateRealtorEmail(lead) : generateLandlordEmail(lead))
+        return
+      }
+      const data = await res.json()
+      setEmail(data.email)
+    } catch {
+      // Fall back to static template
+      setEmail(isRealtor ? generateRealtorEmail(lead) : generateLandlordEmail(lead))
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   useEffect(() => {
     const fn = e => { if (e.key === 'Escape') onClose() }
@@ -295,21 +324,56 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
         <div style={{ padding: '16px 20px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              Letter Draft — edit before sending
+              {email ? 'Letter Draft — edit before sending' : 'Generate a personalized outreach letter'}
             </label>
-            <button className="btn-ghost" style={{ fontSize: '11px', padding: '4px 8px' }}
-              onClick={() => setEmail(isRealtor ? generateRealtorEmail(lead) : generateLandlordEmail(lead))}>
-              <RefreshCw size={10} /> Reset
-            </button>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {email && (
+                <button className="btn-ghost" style={{ fontSize: '11px', padding: '4px 8px' }}
+                  onClick={() => handleGenerate('professional')} disabled={generating}>
+                  <RefreshCw size={10} className={generating ? 'animate-spin' : ''} /> Regenerate
+                </button>
+              )}
+            </div>
           </div>
-          <textarea
-            ref={textareaRef}
-            className="field"
-            style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: '420px' }}
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            spellCheck
-          />
+
+          {!email && !generating ? (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', minHeight: '420px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--tx-4)', margin: 0, textAlign: 'center' }}>
+                AI will write a personalized letter based on this lead's<br />properties, location, score, and ownership signals.
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-gold" style={{ fontSize: '12px', padding: '8px 20px' }} onClick={() => handleGenerate('professional')}>
+                  Generate Letter
+                </button>
+                <button className="btn-ghost" style={{ fontSize: '11px', padding: '8px 12px' }} onClick={() => handleGenerate('friendly')}>
+                  Friendly tone
+                </button>
+                <button className="btn-ghost" style={{ fontSize: '11px', padding: '8px 12px' }} onClick={() => handleGenerate('direct')}>
+                  Direct tone
+                </button>
+              </div>
+              <button className="btn-ghost" style={{ fontSize: '11px', color: 'var(--tx-4)' }}
+                onClick={() => setEmail(generateLandlordEmail(lead))}>
+                Use basic template instead
+              </button>
+            </div>
+          ) : generating ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '420px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--gold)' }} />
+                <p style={{ fontSize: '12px', color: 'var(--tx-4)', margin: 0 }}>Writing personalized letter...</p>
+              </div>
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              className="field"
+              style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: '420px' }}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              spellCheck
+            />
+          )}
         </div>
 
         {/* Send via Mail panel */}

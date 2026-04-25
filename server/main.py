@@ -527,6 +527,99 @@ def outreach_history(lead_id: int):
     return [dict(r) for r in rows]
 
 
+# ── AI Email Generation (Claude) ─────────────────────────────────────────────
+
+class GenerateEmailRequest(BaseModel):
+    lead_id: int
+    tone: Optional[str] = "professional"  # professional, friendly, direct
+
+MAX_GENERATIONS_PER_LEAD = 3
+
+@app.post("/api/outreach/generate")
+def generate_email(body: GenerateEmailRequest):
+    """Generate a personalized outreach email using Claude AI. Max 3 per lead."""
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(501, "ANTHROPIC_API_KEY not configured")
+
+    # Rate limit: max 3 generations per lead
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) as c FROM outreach WHERE lead_id = %s AND channel = 'ai_draft'",
+            [body.lead_id],
+        )
+        count = cur.fetchone()["c"]
+        if count >= MAX_GENERATIONS_PER_LEAD:
+            raise HTTPException(429, f"Generation limit reached ({MAX_GENERATIONS_PER_LEAD} per lead)")
+
+    with get_cursor() as cur:
+        cur.execute("SELECT * FROM leads WHERE id = %s", [body.lead_id])
+        lead = cur.fetchone()
+        if not lead:
+            raise HTTPException(404, "Lead not found")
+
+        cur.execute("""
+            SELECT address, city FROM lead_properties
+            WHERE lead_id = %s LIMIT 10
+        """, [body.lead_id])
+        properties = cur.fetchall()
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    props_list = "\n".join(f"  - {p['address']}, {p['city']}" for p in properties) if properties else "  (address on file)"
+
+    prompt = f"""Write a property management outreach letter for All County Property Management (Boulder County, Colorado).
+
+TARGET OWNER:
+- Name: {lead['owner_name']}
+- Properties owned: {lead['property_count']}
+- Property addresses:
+{props_list}
+- Mailing address: {lead['mailing_address'] or 'N/A'}
+- Mailing state: {lead['mailing_state'] or 'CO'}
+- Score: {lead['score']}/22 (higher = stronger lead)
+- Badges: {', '.join(lead['badges'] or [])}
+
+KEY SIGNALS TO ADDRESS:
+{"- They are an LLC/entity — speak to their investment strategy and NOI optimization" if 'LLC' in (lead['badges'] or []) else ""}
+{"- Out-of-state owner — emphasize local boots-on-the-ground management, they can't be there daily" if 'OUT_OF_STATE' in (lead['badges'] or []) else ""}
+{"- Absentee owner — they don't live near their properties, management is a hassle" if 'ABSENTEE' in (lead['badges'] or []) else ""}
+{"- Portfolio owner (5+ properties) — managing multiple units is time-intensive, professional management scales" if 'PORTFOLIO' in (lead['badges'] or []) else ""}
+{"- Multi-property (3-4 units) — growing portfolio, now is the time to professionalize" if 'MULTI_PROP' in (lead['badges'] or []) else ""}
+{"- New owner — just acquired, may not have management in place yet" if 'NEW_OWNER' in (lead['badges'] or []) else ""}
+
+TONE: {body.tone}
+
+REQUIREMENTS:
+- Keep it under 250 words
+- Reference their specific property/properties by address
+- Reference their specific situation (out-of-state, LLC, new owner, etc.)
+- Include concrete value props: tenant screening, rent collection, maintenance, compliance
+- End with a clear call to action (call or meeting)
+- Sign off as [Your Name], All County Property Management — Boulder County
+- Do NOT include a subject line — just the letter body
+- Sound human, not templated"""
+
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    generated_text = message.content[0].text
+
+    # Log the generation
+    with get_cursor(commit=True) as cur:
+        cur.execute("""
+            INSERT INTO outreach (lead_id, channel, body, status, created_at)
+            VALUES (%s, 'ai_draft', %s, 'draft', NOW())
+        """, [body.lead_id, generated_text])
+
+    remaining = MAX_GENERATIONS_PER_LEAD - count - 1
+    return {"email": generated_text, "generations_remaining": remaining}
+
+
 # ── SPA catch-all (MUST be last) ─────────────────────────────────────────────
 
 @app.get("/{path:path}", include_in_schema=False)

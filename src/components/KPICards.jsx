@@ -23,7 +23,7 @@ function useCountUp(target, duration = 1000) {
 const STATS = [
   { key: 'totalLandlords', label: 'Landlord Leads'   },
   { key: 'newOwnerEvents', label: 'New Owner Events'  },
-  { key: 'totalRealtors',  label: 'Realtor Prospects' },
+  { key: 'totalRealtors',  label: 'Enriched Leads' },
   { key: 'avgScore',       label: 'Avg Lead Score', suffix: 'pts' },
 ]
 

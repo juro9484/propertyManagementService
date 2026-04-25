@@ -73,12 +73,12 @@ CREATE TABLE IF NOT EXISTS lead_properties (
 CREATE TABLE IF NOT EXISTS outreach (
   id            SERIAL PRIMARY KEY,
   lead_id       INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  channel       TEXT NOT NULL CHECK (channel IN ('email', 'letter', 'sms')),
+  channel       TEXT NOT NULL CHECK (channel IN ('email', 'letter', 'sms', 'ai_draft')),
   subject       TEXT,
   body          TEXT,
   to_address    TEXT,          -- email addr or mailing addr depending on channel
   status        TEXT NOT NULL DEFAULT 'queued'
-                CHECK (status IN ('queued', 'sent', 'delivered', 'opened', 'replied', 'bounced', 'failed')),
+                CHECK (status IN ('draft', 'queued', 'sent', 'delivered', 'opened', 'replied', 'bounced', 'failed')),
   external_id   TEXT,          -- Lob letter ID, SendGrid message ID, etc.
   cost          NUMERIC(6,2),  -- cost in dollars
   sent_at       TIMESTAMPTZ,

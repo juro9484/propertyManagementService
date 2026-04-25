@@ -32,13 +32,22 @@ def get_cursor(commit=False):
 
 
 def init_db():
-    """Run schema.sql to create tables if they don't exist."""
+    """Run schema.sql to create tables if they don't exist, then run migrations."""
     schema_path = Path(__file__).parent / "schema.sql"
     sql = schema_path.read_text()
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(sql)
+            # Migrations: update constraints to support new values
+            cur.execute("""
+                ALTER TABLE outreach DROP CONSTRAINT IF EXISTS outreach_channel_check;
+                ALTER TABLE outreach ADD CONSTRAINT outreach_channel_check
+                    CHECK (channel IN ('email', 'letter', 'sms', 'ai_draft'));
+                ALTER TABLE outreach DROP CONSTRAINT IF EXISTS outreach_status_check;
+                ALTER TABLE outreach ADD CONSTRAINT outreach_status_check
+                    CHECK (status IN ('draft', 'queued', 'sent', 'delivered', 'opened', 'replied', 'bounced', 'failed'));
+            """)
         conn.commit()
         print("[DB] Schema initialized")
     finally:
