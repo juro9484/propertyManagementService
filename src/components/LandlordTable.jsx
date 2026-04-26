@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Mail, MapPin, Home, Search, ChevronDown, ChevronUp, Phone } from 'lucide-react'
+import { Mail, Home, Search, ChevronDown, ChevronUp, Phone } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 
@@ -135,15 +135,22 @@ function LeadCard({ lead, selected, statuses, onSelect, onStatusChange }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0, marginRight: '10px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--tx-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {lead.owner_name}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            {(lead.email || lead.phone) && (
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--b-green-tx)', flexShrink: 0 }} title="Contact info available" />
+            )}
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--tx-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lead.owner_name}
+            </span>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--tx-4)', marginTop: '2px' }}>
             {lead.city}{lead.property_count > 1 ? ` · ${lead.property_count} props` : ''}
           </div>
-          {lead.email && (
-            <div style={{ fontSize: '10px', color: 'var(--b-green-tx)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {lead.email}
+          {(lead.email || lead.phone) && (
+            <div style={{ fontSize: '10px', color: 'var(--tx-3)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {lead.email && <span style={{ color: 'var(--b-green-tx)' }}>{lead.email}</span>}
+              {lead.email && lead.phone && <span style={{ color: 'var(--tx-4)' }}> · </span>}
+              {lead.phone && <span style={{ color: 'var(--b-blue-tx)' }}>{lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}</span>}
             </div>
           )}
         </div>
@@ -201,12 +208,32 @@ function DetailPanel({ lead, onOutreach }) {
         </div>
       </div>
 
-      {/* Badges */}
-      {lead.badges?.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-          {lead.badges.map(b => <Badge key={b} type={b} />)}
-        </div>
-      )}
+      {/* Contact info + badges row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {lead.email && (
+          <a href={`mailto:${lead.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--b-green-tx)', backgroundColor: 'var(--b-green-bg)', border: '1px solid var(--b-green-bd)', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none' }}>
+            <Mail size={10} /> {lead.email}
+          </a>
+        )}
+        {lead.phone && (
+          <a href={`tel:${lead.phone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--b-blue-tx)', backgroundColor: 'var(--b-blue-bg)', border: '1px solid var(--b-blue-bd)', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none' }}>
+            <Phone size={10} /> {lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}
+          </a>
+        )}
+        {lead.mailing_state && lead.mailing_state !== 'CO' && (
+          <span style={{ fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', backgroundColor: 'var(--b-red-bg)', color: 'var(--b-red-tx)', border: '1px solid var(--b-red-bd)' }}>
+            {lead.mailing_state}
+          </span>
+        )}
+        {lead.badges?.map(b => <Badge key={b} type={b} />)}
+        <button
+          className="btn-gold"
+          style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '11px' }}
+          onClick={() => onOutreach(lead)}
+        >
+          <Mail size={10} /> Draft Letter
+        </button>
+      </div>
 
       {/* 3-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flex: 1 }}>
@@ -217,7 +244,7 @@ function DetailPanel({ lead, onOutreach }) {
             Properties ({lead.property_count})
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            {(lead.all_properties ?? [lead]).map((p, i) => (
+            {(lead.all_properties ?? [lead]).slice(0, 8).map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                 <Home size={9} style={{ color: 'var(--tx-4)', flexShrink: 0, marginTop: '2px' }} />
                 <span style={{ fontSize: '11px', color: 'var(--tx-2)', lineHeight: 1.35 }}>
@@ -225,6 +252,9 @@ function DetailPanel({ lead, onOutreach }) {
                 </span>
               </div>
             ))}
+            {(lead.all_properties?.length ?? 0) > 8 && (
+              <span style={{ fontSize: '10px', color: 'var(--tx-4)' }}>+{lead.all_properties.length - 8} more</span>
+            )}
           </div>
         </div>
 
@@ -247,67 +277,21 @@ function DetailPanel({ lead, onOutreach }) {
           </div>
         </div>
 
-        {/* Record details + outreach */}
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.09em', margin: '0 0 8px' }}>
-              Record Details
+        {/* Mailing details */}
+        <div>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.09em', margin: '0 0 8px' }}>
+            Mailing Address
+          </p>
+          {lead.mailing_address && (
+            <p style={{ fontSize: '11px', color: 'var(--tx-2)', margin: 0, lineHeight: 1.5 }}>
+              {lead.mailing_address}
             </p>
-            <dl style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {lead.email && (
-                <div>
-                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
-                    <Mail size={9} /> Email
-                  </dt>
-                  <dd style={{ fontSize: '11px', color: 'var(--b-green-tx)', margin: 0 }}>
-                    <a href={`mailto:${lead.email}`} style={{ color: 'inherit', textDecoration: 'none' }}>{lead.email}</a>
-                  </dd>
-                </div>
-              )}
-              {lead.phone && (
-                <div>
-                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
-                    <Phone size={9} /> Phone
-                  </dt>
-                  <dd style={{ fontSize: '11px', color: 'var(--b-blue-tx)', margin: 0 }}>
-                    <a href={`tel:${lead.phone}`} style={{ color: 'inherit', textDecoration: 'none' }}>{lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}</a>
-                  </dd>
-                </div>
-              )}
-              {lead.mailing_address && (
-                <div>
-                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px', marginBottom: '2px' }}>
-                    <MapPin size={9} /> Mailing
-                  </dt>
-                  <dd style={{ fontSize: '11px', color: 'var(--tx-2)', margin: 0, lineHeight: 1.35 }}>{lead.mailing_address}</dd>
-                </div>
-              )}
-              {lead.mailing_state && (
-                <div>
-                  <dt style={{ fontSize: '10px', color: 'var(--tx-4)', marginBottom: '2px' }}>Mail State</dt>
-                  <dd style={{ margin: 0 }}>
-                    <span style={{
-                      fontSize: '11px', fontWeight: 600, padding: '1px 6px', borderRadius: '3px',
-                      backgroundColor: lead.mailing_state === 'CO' ? 'var(--bg-raised)' : 'var(--b-red-bg)',
-                      color: lead.mailing_state === 'CO' ? 'var(--tx-3)' : 'var(--b-red-tx)',
-                      border: `1px solid ${lead.mailing_state === 'CO' ? 'var(--bd)' : 'var(--b-red-bd)'}`,
-                    }}>
-                      {lead.mailing_state}
-                    </span>
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </div>
-
-          <button
-            className="btn-gold"
-            style={{ width: '100%', justifyContent: 'center', padding: '8px', marginTop: '12px' }}
-            onClick={() => onOutreach(lead)}
-          >
-            <Mail size={11} />
-            Draft Outreach Letter
-          </button>
+          )}
+          {!lead.email && !lead.phone && (
+            <p style={{ fontSize: '10px', color: 'var(--tx-4)', margin: '8px 0 0', fontStyle: 'italic' }}>
+              No contact info found — use mailing address for outreach
+            </p>
+          )}
         </div>
 
       </div>
@@ -373,7 +357,7 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
   , [leads])
 
   return (
-    <div className="panel" style={{ display: 'flex', height: 'calc(100vh - 430px)', minHeight: '640px', overflow: 'hidden' }}>
+    <div className="panel" style={{ display: 'flex', height: 'calc(100vh - 220px)', minHeight: '500px', overflow: 'hidden' }}>
 
       {/* ── Left panel ── */}
       <div style={{ width: '380px', flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--bd)', overflow: 'hidden' }}>

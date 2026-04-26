@@ -110,10 +110,6 @@ export default function App() {
       backgroundColor: 'var(--bg-raised)',
       borderBottom: '1px solid var(--bd)',
     },
-    pageHeader: {
-      backgroundColor: 'var(--bg-surface)',
-      borderBottom: '1px solid var(--bd)',
-    },
   }
 
   return (
@@ -121,59 +117,45 @@ export default function App() {
 
       {/* ── Top bar ── */}
       <div style={S.topBar}>
-        <div className="max-w-[1600px] mx-auto px-8 h-28 flex items-center justify-between">
+        <div className="max-w-[1600px] mx-auto px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/img_55573.png" alt="All County Property Management" style={{ height: '96px', width: 'auto', objectFit: 'contain' }} />
-            <span style={{ color: 'var(--bd)', margin: '0 2px' }}>|</span>
-            <span style={{ color: 'var(--tx-3)', fontSize: '12px' }}>Boulder County, Colorado</span>
+            <img src="/img_55573.png" alt="All County" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
+            <div>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--tx-1)' }}>Prospect Pipeline</span>
+              <span style={{ color: 'var(--tx-4)', fontSize: '11px', marginLeft: '8px' }}>Boulder County</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {usingMock && (
               <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--gold)' }}>
-                <AlertCircle size={11} />
-                Demo mode — run <code className="font-mono">python pipeline.py</code> for live data
+                <AlertCircle size={11} /> Demo mode
               </span>
             )}
-            <span style={{ color: 'var(--tx-3)', fontSize: '12px' }}>
-              Report: {runDate}
-            </span>
+            <span style={{ color: 'var(--tx-4)', fontSize: '11px' }}>{runDate}</span>
             <button
               onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
               className="btn-ghost"
-              style={{ padding: '5px 8px' }}
-              title="Toggle light / dark mode"
+              style={{ padding: '4px 6px' }}
+              title="Toggle theme"
             >
               {theme === 'dark'
-                ? <Sun  size={13} style={{ color: 'var(--tx-3)' }} />
-                : <Moon size={13} style={{ color: 'var(--tx-3)' }} />}
+                ? <Sun  size={12} style={{ color: 'var(--tx-3)' }} />
+                : <Moon size={12} style={{ color: 'var(--tx-3)' }} />}
             </button>
-            <button onClick={loadData} disabled={loading} className="btn-ghost text-xs">
-              <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-              Refresh
+            <button onClick={loadData} disabled={loading} className="btn-ghost" style={{ padding: '4px 6px' }}>
+              <RefreshCw size={11} className={loading ? 'animate-spin' : ''} style={{ color: 'var(--tx-3)' }} />
             </button>
             <span style={{ color: 'var(--bd)' }}>|</span>
             <span style={{ fontSize: '11px', color: 'var(--tx-4)' }}>{user?.name}</span>
-            <button onClick={handleLogout} className="btn-ghost text-xs" title="Sign out">
-              <LogOut size={11} />
+            <button onClick={handleLogout} className="btn-ghost" style={{ padding: '4px 6px' }} title="Sign out">
+              <LogOut size={11} style={{ color: 'var(--tx-3)' }} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── Page header ── */}
-      <div style={S.pageHeader}>
-        <div className="max-w-[1600px] mx-auto px-8 py-5">
-          <h1 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--tx-1)', letterSpacing: '-0.01em', margin: 0 }}>
-            Prospect Pipeline
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--tx-3)', marginTop: '3px', marginBottom: 0 }}>
-            Owner leads ranked by management probability — Boulder County public records
-          </p>
-        </div>
-      </div>
-
-      <main className="max-w-[1600px] mx-auto px-8 py-7 space-y-7">
+      <main className="max-w-[1600px] mx-auto px-6 py-4 space-y-4">
 
         <KPICards
           totalLandlords={leads.length}

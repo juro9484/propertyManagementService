@@ -592,14 +592,13 @@ KEY SIGNALS TO ADDRESS:
 TONE: {body.tone}
 
 REQUIREMENTS:
-- Keep it under 250 words
-- Reference their specific property/properties by address
-- Reference their specific situation (out-of-state, LLC, new owner, etc.)
-- Include concrete value props: tenant screening, rent collection, maintenance, compliance
-- End with a clear call to action (call or meeting)
+- Keep it SHORT — under 150 words. 3-4 short paragraphs max.
+- Reference ONE specific property address and their situation
+- ONE concrete value prop (pick the most relevant for their situation)
+- End with a clear, simple call to action
 - Sign off as [Your Name], All County Property Management — Boulder County
-- Do NOT include a subject line — just the letter body
-- Sound human, not templated"""
+- No subject line — just the letter body
+- Conversational, not corporate. Short sentences."""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
