@@ -20,16 +20,16 @@ def send_alert(title: str, message: str, level: str = "error"):
     """Send an alert via configured channels. Level: info, warning, error."""
     sent = []
 
-    # Gmail SMTP
+    # Email SMTP (Gmail or Outlook)
     to_email = os.getenv("ALERT_EMAIL_TO")
-    gmail_user = os.getenv("ALERT_GMAIL_USER")
-    gmail_pass = os.getenv("ALERT_GMAIL_APP_PASSWORD")
-    if to_email and gmail_user and gmail_pass:
+    smtp_user = os.getenv("ALERT_SMTP_USER")
+    smtp_pass = os.getenv("ALERT_SMTP_PASSWORD")
+    if to_email and smtp_user and smtp_pass:
         try:
-            _send_gmail(gmail_user, gmail_pass, to_email, title, message, level)
+            _send_email(smtp_user, smtp_pass, to_email, title, message, level)
             sent.append("email")
         except Exception as e:
-            print(f"[ALERT] Gmail failed: {e}")
+            print(f"[ALERT] Email failed: {e}")
 
     # Slack webhook
     slack_url = os.getenv("ALERT_SLACK_WEBHOOK")
@@ -70,18 +70,18 @@ def pipeline_failure(county: str, error: str):
     )
 
 
-def _send_gmail(user: str, app_password: str, to: str, title: str, message: str, level: str):
+def _send_email(user: str, password: str, to_list: str, title: str, message: str, level: str):
+    """Send email via SMTP. Supports Gmail and Outlook/M365."""
     icon = {"info": "✅", "warning": "⚠️", "error": "🚨"}.get(level, "🔔")
+    recipients = [e.strip() for e in to_list.split(",")]
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"{icon} [ACPM] {title}"
     msg["From"] = f"All County Pipeline <{user}>"
-    msg["To"] = to
+    msg["To"] = ", ".join(recipients)
 
-    # Plain text
     msg.attach(MIMEText(message, "plain"))
 
-    # HTML version
     color = {"info": "#22c55e", "warning": "#f59e0b", "error": "#ef4444"}.get(level, "#999")
     html = f"""
     <div style="font-family: -apple-system, sans-serif; max-width: 500px; padding: 20px;">
@@ -94,9 +94,25 @@ def _send_gmail(user: str, app_password: str, to: str, title: str, message: str,
     """
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(user, app_password)
-        server.sendmail(user, to, msg.as_string())
+    # Detect provider from email domain
+    domain = user.split("@")[-1].lower()
+    if "gmail" in domain:
+        host, port, use_ssl = "smtp.gmail.com", 465, True
+    elif "outlook" in domain or "hotmail" in domain or "live" in domain:
+        host, port, use_ssl = "smtp.office365.com", 587, False
+    else:
+        # Default to Office 365 (works for custom domains on M365)
+        host, port, use_ssl = "smtp.office365.com", 587, False
+
+    if use_ssl:
+        with smtplib.SMTP_SSL(host, port) as server:
+            server.login(user, password)
+            server.sendmail(user, recipients, msg.as_string())
+    else:
+        with smtplib.SMTP(host, port) as server:
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(user, recipients, msg.as_string())
 
 
 def _send_slack(webhook_url: str, title: str, message: str, level: str):
