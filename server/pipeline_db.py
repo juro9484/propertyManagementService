@@ -145,6 +145,16 @@ def run_pipeline(county: str = "boulder"):
                 WHERE id = %s
             """, [result["records_processed"], result["leads_scored"],
                   result["new_owners_found"], run_id])
+
+        # Alert: success
+        try:
+            from alerts import pipeline_success
+            pipeline_success(county, result["leads_scored"],
+                           result.get("leads_enriched", 0),
+                           result.get("addresses_geocoded", 0))
+        except Exception:
+            pass
+
         return result
 
     except Exception as e:
@@ -153,6 +163,14 @@ def run_pipeline(county: str = "boulder"):
                 "UPDATE pipeline_runs SET status = 'failed', finished_at = NOW(), error_message = %s WHERE id = %s",
                 [str(e), run_id],
             )
+
+        # Alert: failure
+        try:
+            from alerts import pipeline_failure
+            pipeline_failure(county, str(e))
+        except Exception:
+            pass
+
         raise
 
 

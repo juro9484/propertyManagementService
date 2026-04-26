@@ -75,18 +75,16 @@ function MapController({ coords, theme }) {
   return null
 }
 
-// ── Status system ────────────────────────────────────────────────────────────
-const LS_KEY = 'acpm_lead_status'
-function loadStatuses() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '{}') } catch { return {} }
-}
-
+// ── Status system (DB-backed, shared across users) ──────────────────────────
 const STATUS_CFG = {
-  new:       { label: 'New',       bg: 'var(--bd-s)',       tx: 'var(--tx-4)',      bd: 'var(--bd)'         },
-  contacted: { label: 'Contacted', bg: 'var(--b-blue-bg)',  tx: 'var(--b-blue-tx)', bd: 'var(--b-blue-bd)'  },
-  replied:   { label: 'Replied',   bg: 'var(--b-green-bg)', tx: 'var(--b-green-tx)',bd: 'var(--b-green-bd)' },
+  new:              { label: 'New',              bg: 'var(--bd-s)',        tx: 'var(--tx-4)',       bd: 'var(--bd)'          },
+  contacted:        { label: 'Contacted',        bg: 'var(--b-blue-bg)',   tx: 'var(--b-blue-tx)',  bd: 'var(--b-blue-bd)'   },
+  follow_up:        { label: 'Follow Up',        bg: 'var(--b-amber-bg)',  tx: 'var(--b-amber-tx)', bd: 'var(--b-amber-bd)'  },
+  meeting:          { label: 'Meeting',          bg: 'var(--b-purple-bg)', tx: 'var(--b-purple-tx)',bd: 'var(--b-purple-bd)' },
+  converted:        { label: 'Converted',        bg: 'var(--b-green-bg)',  tx: 'var(--b-green-tx)', bd: 'var(--b-green-bd)'  },
+  not_interested:   { label: 'Not Interested',   bg: 'var(--b-red-bg)',    tx: 'var(--b-red-tx)',   bd: 'var(--b-red-bd)'    },
 }
-const STATUS_CYCLE = ['new', 'contacted', 'replied']
+const STATUS_CYCLE = ['new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested']
 
 // ── Badge system ─────────────────────────────────────────────────────────────
 const BADGE_CFG = {
@@ -115,9 +113,9 @@ function Badge({ type }) {
 }
 
 // ── Left panel: compact lead card ────────────────────────────────────────────
-function LeadCard({ lead, selected, statuses, onSelect, onStatusChange }) {
-  const status    = statuses[lead.folio] ?? 'new'
-  const sc        = STATUS_CFG[status]
+function LeadCard({ lead, selected, onSelect, onStatusChange }) {
+  const status    = lead.status ?? 'new'
+  const sc        = STATUS_CFG[status] ?? STATUS_CFG.new
   const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
   const scoreColor = pinColor(lead.score)
 
@@ -163,7 +161,7 @@ function LeadCard({ lead, selected, statuses, onSelect, onStatusChange }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
         {lead.badges?.slice(0, 3).map(b => <Badge key={b} type={b} />)}
         <button
-          onClick={e => { e.stopPropagation(); onStatusChange(lead.folio, nextStatus) }}
+          onClick={e => { e.stopPropagation(); onStatusChange(lead.id, nextStatus) }}
           title={`Click to mark as "${nextStatus}"`}
           style={{
             marginLeft: 'auto', display: 'inline-flex', alignItems: 'center',
@@ -309,17 +307,30 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
   const [minScore, setMinScore]           = useState(0)
   const [search, setSearch]               = useState('')
   const [page, setPage]                   = useState(1)
-  const [statuses, setStatuses]           = useState(loadStatuses)
   const [statusFilter, setStatusFilter]   = useState('')
+
+  const API_BASE = import.meta.env.VITE_API_URL || ''
+  const getAuthHeaders = () => {
+    const t = localStorage.getItem('acpm_token')
+    return t ? { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' } : {}
+  }
 
   useEffect(() => {
     if (!selectedFolio && leads.length > 0) setSelectedFolio(leads[0].folio)
   }, [leads])
 
-  const handleStatusChange = (folio, next) => {
-    const updated = { ...statuses, [folio]: next }
-    setStatuses(updated)
-    localStorage.setItem(LS_KEY, JSON.stringify(updated))
+  const handleStatusChange = async (leadId, next) => {
+    // Optimistic update
+    const lead = leads.find(l => l.id === leadId)
+    if (lead) lead.status = next
+    // Persist to DB
+    try {
+      await fetch(`${API_BASE}/api/leads/${leadId}/status`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status: next }),
+      })
+    } catch (e) { console.error('Status update failed', e) }
   }
 
   const cities = useMemo(() => [...new Set(leads.map(l => l.city).filter(Boolean))].sort(), [leads])
@@ -336,10 +347,10 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
     }
     if (cityFilter)   rows = rows.filter(l => l.city === cityFilter)
     if (minScore)     rows = rows.filter(l => l.score >= minScore)
-    if (statusFilter) rows = rows.filter(l => (statuses[l.folio] ?? 'new') === statusFilter)
+    if (statusFilter) rows = rows.filter(l => (l.status ?? 'new') === statusFilter)
     rows.sort((a, b) => sortDir === 'desc' ? b.score - a.score : a.score - b.score)
     return rows
-  }, [leads, search, cityFilter, minScore, sortDir, statusFilter, statuses])
+  }, [leads, search, cityFilter, minScore, sortDir, statusFilter])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -391,7 +402,10 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
               <option value="">All</option>
               <option value="new">New</option>
               <option value="contacted">Contacted</option>
-              <option value="replied">Replied</option>
+              <option value="follow_up">Follow Up</option>
+              <option value="meeting">Meeting</option>
+              <option value="converted">Converted</option>
+              <option value="not_interested">Not Interested</option>
             </select>
           </div>
 
@@ -417,7 +431,6 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
               key={lead.folio}
               lead={lead}
               selected={selectedFolio === lead.folio}
-              statuses={statuses}
               onSelect={() => setSelectedFolio(lead.folio)}
               onStatusChange={handleStatusChange}
             />

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS leads (
 
   -- workflow
   status        TEXT NOT NULL DEFAULT 'new'
-                CHECK (status IN ('new', 'contacted', 'replied', 'converted', 'skipped')),
+                CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS users (
   active        BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_login    TIMESTAMPTZ
+);
+
+-- ─── Lead activity log (who did what, when) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS lead_activity (
+  id            SERIAL PRIMARY KEY,
+  lead_id       INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  user_id       INTEGER REFERENCES users(id),
+  action        TEXT NOT NULL,           -- 'status_change', 'email_generated', 'letter_sent', 'note'
+  detail        TEXT,                    -- e.g. "new → contacted", or a note
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ─── Indexes ────────────────────────────────────────────────────────────────

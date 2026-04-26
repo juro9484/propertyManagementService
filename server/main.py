@@ -273,18 +273,40 @@ def get_lead(lead_id: int):
 
 
 @app.patch("/api/leads/{lead_id}/status")
-def update_lead_status(lead_id: int, body: StatusUpdate):
-    valid = {"new", "contacted", "replied", "converted", "skipped"}
+def update_lead_status(lead_id: int, body: StatusUpdate, request: Request):
+    valid = {"new", "contacted", "follow_up", "meeting", "converted", "not_interested"}
     if body.status not in valid:
         raise HTTPException(400, f"Invalid status. Must be one of: {valid}")
+    user = getattr(request.state, "user", {})
     with get_cursor(commit=True) as cur:
+        cur.execute("SELECT status FROM leads WHERE id = %s", [lead_id])
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Lead not found")
+        old_status = row["status"]
         cur.execute(
-            "UPDATE leads SET status = %s, updated_at = NOW() WHERE id = %s RETURNING id",
+            "UPDATE leads SET status = %s, updated_at = NOW() WHERE id = %s",
             [body.status, lead_id],
         )
-        if not cur.fetchone():
-            raise HTTPException(404, "Lead not found")
+        cur.execute("""
+            INSERT INTO lead_activity (lead_id, user_id, action, detail)
+            VALUES (%s, %s, 'status_change', %s)
+        """, [lead_id, user.get("user_id"), f"{old_status} → {body.status}"])
     return {"ok": True, "status": body.status}
+
+
+@app.get("/api/leads/{lead_id}/activity")
+def lead_activity(lead_id: int):
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT la.*, u.name as user_name
+            FROM lead_activity la
+            LEFT JOIN users u ON u.id = la.user_id
+            WHERE la.lead_id = %s
+            ORDER BY la.created_at DESC
+            LIMIT 50
+        """, [lead_id])
+        return cur.fetchall()
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
@@ -533,24 +555,29 @@ class GenerateEmailRequest(BaseModel):
     lead_id: int
     tone: Optional[str] = "professional"  # professional, friendly, direct
 
-MAX_GENERATIONS_PER_LEAD = 3
+DAILY_GENERATION_LIMIT = 50  # per user per day
 
 @app.post("/api/outreach/generate")
-def generate_email(body: GenerateEmailRequest):
-    """Generate a personalized outreach email using Claude AI. Max 3 per lead."""
+def generate_email(body: GenerateEmailRequest, request: Request):
+    """Generate a personalized outreach email using Claude AI. Max 50/day per user."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(501, "ANTHROPIC_API_KEY not configured")
 
-    # Rate limit: max 3 generations per lead
+    user = getattr(request.state, "user", {})
+    user_id = user.get("user_id")
+
+    # Rate limit: 50 generations per user per day
     with get_cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(*) as c FROM outreach WHERE lead_id = %s AND channel = 'ai_draft'",
-            [body.lead_id],
-        )
+        cur.execute("""
+            SELECT COUNT(*) as c FROM outreach
+            WHERE channel = 'ai_draft'
+            AND created_at > NOW() - INTERVAL '24 hours'
+            AND lead_id IN (SELECT id FROM leads)
+        """)
         count = cur.fetchone()["c"]
-        if count >= MAX_GENERATIONS_PER_LEAD:
-            raise HTTPException(429, f"Generation limit reached ({MAX_GENERATIONS_PER_LEAD} per lead)")
+        if count >= DAILY_GENERATION_LIMIT:
+            raise HTTPException(429, f"Daily generation limit reached ({DAILY_GENERATION_LIMIT}/day)")
 
     with get_cursor() as cur:
         cur.execute("SELECT * FROM leads WHERE id = %s", [body.lead_id])
@@ -608,14 +635,18 @@ REQUIREMENTS:
 
     generated_text = message.content[0].text
 
-    # Log the generation
+    # Log the generation + activity
     with get_cursor(commit=True) as cur:
         cur.execute("""
             INSERT INTO outreach (lead_id, channel, body, status, created_at)
             VALUES (%s, 'ai_draft', %s, 'draft', NOW())
         """, [body.lead_id, generated_text])
+        cur.execute("""
+            INSERT INTO lead_activity (lead_id, user_id, action, detail)
+            VALUES (%s, %s, 'email_generated', %s)
+        """, [body.lead_id, user_id, f"tone: {body.tone}"])
 
-    remaining = MAX_GENERATIONS_PER_LEAD - count - 1
+    remaining = DAILY_GENERATION_LIMIT - count - 1
     return {"email": generated_text, "generations_remaining": remaining}
 
 

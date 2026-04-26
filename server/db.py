@@ -47,6 +47,9 @@ def init_db():
                 ALTER TABLE outreach DROP CONSTRAINT IF EXISTS outreach_status_check;
                 ALTER TABLE outreach ADD CONSTRAINT outreach_status_check
                     CHECK (status IN ('draft', 'queued', 'sent', 'delivered', 'opened', 'replied', 'bounced', 'failed'));
+                ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check;
+                ALTER TABLE leads ADD CONSTRAINT leads_status_check
+                    CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested'));
             """)
         conn.commit()
         print("[DB] Schema initialized")
