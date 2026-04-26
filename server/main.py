@@ -52,6 +52,12 @@ DIST_DIR = Path(__file__).parent.parent / "dist"
 def startup():
     init_db()
     seed_admin()
+    # Clean up any orphaned "running" pipeline runs from crashed containers
+    with get_cursor(commit=True) as cur:
+        cur.execute("""
+            UPDATE pipeline_runs SET status = 'failed', error_message = 'Orphaned — container restarted'
+            WHERE status = 'running'
+        """)
     if (DIST_DIR / "index.html").exists():
         app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
         if (DIST_DIR / "data").exists():
@@ -132,6 +138,55 @@ class SendEmailRequest(BaseModel):
     subject: str
     body: str
     to_email: str
+
+
+# ── Health check (public — no auth required) ─────────────────────────────────
+
+@app.get("/api/health")
+def health_check():
+    """Quick health check — DB connection, last pipeline run, lead/enrichment counts."""
+    try:
+        with get_cursor() as cur:
+            cur.execute("SELECT 1")
+            db_ok = True
+    except Exception:
+        db_ok = False
+
+    last_run = None
+    try:
+        with get_cursor() as cur:
+            cur.execute("""
+                SELECT status, started_at, finished_at, leads_scored, records_processed, error_message
+                FROM pipeline_runs
+                WHERE status IN ('completed', 'failed')
+                ORDER BY started_at DESC LIMIT 1
+            """)
+            row = cur.fetchone()
+            if row:
+                last_run = {
+                    "status": row["status"],
+                    "started_at": row["started_at"].isoformat() if row["started_at"] else None,
+                    "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+                    "leads_scored": row["leads_scored"],
+                    "records_processed": row["records_processed"],
+                    "error": row["error_message"],
+                }
+
+            cur.execute("SELECT COUNT(*) as c FROM leads")
+            total_leads = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) as c FROM leads WHERE enriched_at IS NOT NULL")
+            enriched = cur.fetchone()["c"]
+    except Exception:
+        total_leads = 0
+        enriched = 0
+
+    return {
+        "healthy": db_ok,
+        "database": "connected" if db_ok else "unreachable",
+        "total_leads": total_leads,
+        "enriched_leads": enriched,
+        "last_pipeline_run": last_run,
+    }
 
 
 # ── Stats ─────────────────────────────────────────────────────────────────────

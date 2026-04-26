@@ -66,7 +66,7 @@ def decode_token(token: str) -> dict:
 # ── Auth middleware ───────────────────────────────────────────────────────────
 
 # Routes that don't require authentication
-PUBLIC_PATHS = {"/api/auth/login", "/docs", "/openapi.json", "/redoc"}
+PUBLIC_PATHS = {"/api/auth/login", "/api/health", "/docs", "/openapi.json", "/redoc"}
 
 def get_current_user(request: Request) -> Optional[dict]:
     """Extract and validate JWT from Authorization header.
