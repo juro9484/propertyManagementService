@@ -113,8 +113,8 @@ function Badge({ type }) {
 }
 
 // ── Left panel: compact lead card ────────────────────────────────────────────
-function LeadCard({ lead, selected, onSelect, onStatusChange }) {
-  const status    = lead.status ?? 'new'
+function LeadCard({ lead, selected, onSelect, onStatusChange, statusOverride }) {
+  const status    = statusOverride ?? lead.status ?? 'new'
   const sc        = STATUS_CFG[status] ?? STATUS_CFG.new
   const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
   const scoreColor = pinColor(lead.score)
@@ -319,10 +319,11 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
     if (!selectedFolio && leads.length > 0) setSelectedFolio(leads[0].folio)
   }, [leads])
 
+  const [statusOverrides, setStatusOverrides] = useState({})
+
   const handleStatusChange = async (leadId, next) => {
-    // Optimistic update
-    const lead = leads.find(l => l.id === leadId)
-    if (lead) lead.status = next
+    // Optimistic update via local state
+    setStatusOverrides(prev => ({ ...prev, [leadId]: next }))
     // Persist to DB
     try {
       await fetch(`${API_BASE}/api/leads/${leadId}/status`, {
@@ -332,6 +333,9 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
       })
     } catch (e) { console.error('Status update failed', e) }
   }
+
+  // Merge DB status with local overrides
+  const getLeadStatus = (lead) => statusOverrides[lead.id] ?? lead.status ?? 'new'
 
   const cities = useMemo(() => [...new Set(leads.map(l => l.city).filter(Boolean))].sort(), [leads])
 
@@ -347,7 +351,7 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
     }
     if (cityFilter)   rows = rows.filter(l => l.city === cityFilter)
     if (minScore)     rows = rows.filter(l => l.score >= minScore)
-    if (statusFilter) rows = rows.filter(l => (l.status ?? 'new') === statusFilter)
+    if (statusFilter) rows = rows.filter(l => (statusOverrides[l.id] ?? l.status ?? 'new') === statusFilter)
     rows.sort((a, b) => sortDir === 'desc' ? b.score - a.score : a.score - b.score)
     return rows
   }, [leads, search, cityFilter, minScore, sortDir, statusFilter])
@@ -433,6 +437,7 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
               selected={selectedFolio === lead.folio}
               onSelect={() => setSelectedFolio(lead.folio)}
               onStatusChange={handleStatusChange}
+              statusOverride={statusOverrides[lead.id]}
             />
           ))}
         </div>
