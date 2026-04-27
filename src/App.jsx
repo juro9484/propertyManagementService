@@ -218,7 +218,7 @@ export default function App() {
                     backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
                     color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
                   }}>
-                    {i === 0 ? leads.length : pipelineLeads.length}
+                    {i === 0 ? (landlordData?.total_records_processed ?? leads.length) : (pipelineData?.total_records_processed ?? pipelineLeads.length)}
                   </span>
                 )}
               </button>
