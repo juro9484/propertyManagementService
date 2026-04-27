@@ -221,10 +221,10 @@ export default function App() {
         ) : (
           <>
             {activeTab === 0 && (
-              <LandlordTable leads={leads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} />
+              <LandlordTable leads={leads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} />
             )}
             {activeTab === 1 && (
-              <PropertyMap leads={leads} theme={theme} />
+              <PropertyMap leads={leads} theme={theme} county={county} />
             )}
             {activeTab === 2 && user?.role === 'admin' && (
               <UserManagement />

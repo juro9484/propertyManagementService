@@ -3,7 +3,10 @@ import { Mail, Home, Search, ChevronDown, ChevronUp, Phone } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet'
 
-const BOULDER_CENTER = [40.015, -105.271]
+const COUNTY_CENTERS = {
+  boulder: [40.015, -105.271],
+  larimer: [40.585, -105.084],
+}
 const TILE_URL   = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
 const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 
@@ -38,12 +41,12 @@ function pinColor(score) {
 }
 
 // Flies/fits the map to the selected lead's coords whenever selection changes
-function MapController({ coords, theme }) {
+function MapController({ coords, theme, center }) {
   const map = useMap()
 
   useEffect(() => {
     if (!coords || coords.length === 0) {
-      map.flyTo(BOULDER_CENTER, 11, { duration: 0.8 })
+      map.flyTo(center, 11, { duration: 0.8 })
       return
     }
     if (coords.length === 1) {
@@ -51,7 +54,7 @@ function MapController({ coords, theme }) {
     } else {
       map.flyToBounds(coords, { padding: [44, 44], duration: 0.8 })
     }
-  }, [coords, map])
+  }, [coords, center, map])
 
   useEffect(() => {
     setTimeout(() => map.invalidateSize(), 50)
@@ -285,7 +288,8 @@ function DetailPanel({ lead, onOutreach }) {
 // ── Main component ───────────────────────────────────────────────────────────
 const PAGE_SIZE = 20
 
-export default function LandlordTable({ leads, onOutreach, theme }) {
+export default function LandlordTable({ leads, onOutreach, theme, county }) {
+  const defaultCenter = COUNTY_CENTERS[county] || COUNTY_CENTERS.boulder
   const [selectedFolio, setSelectedFolio] = useState(() => leads[0]?.folio ?? null)
   const [sortDir, setSortDir]             = useState('desc')
   const [cityFilter, setCityFilter]       = useState('')
@@ -451,14 +455,14 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
             </div>
           )}
           <MapContainer
-            center={BOULDER_CENTER}
+            center={defaultCenter}
             zoom={11}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom
             zoomControl
           >
             <TileLayer url={TILE_URL} attribution={CARTO_ATTR} />
-            <MapController coords={selectedCoords} theme={theme} />
+            <MapController coords={selectedCoords} theme={theme} center={defaultCenter} />
 
             {/* Background pins — all non-selected leads */}
             {allPins

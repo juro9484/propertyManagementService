@@ -1,7 +1,10 @@
 import 'leaflet/dist/leaflet.css'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 
-const BOULDER_CENTER = [40.015, -105.271]
+const COUNTY_CENTERS = {
+  boulder: [40.015, -105.271],
+  larimer: [40.585, -105.084],
+}
 
 const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png'
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
@@ -40,7 +43,8 @@ const BADGE_LABELS = {
   MULTI_PROP:   'Multi-prop',
 }
 
-export default function PropertyMap({ leads, theme }) {
+export default function PropertyMap({ leads, theme, county }) {
+  const mapCenter = COUNTY_CENTERS[county] || COUNTY_CENTERS.boulder
   const mappable = leads
     .map(l => ({ ...l, _coords: resolveCoords(l) }))
     .filter(l => l._coords !== null)
@@ -77,7 +81,7 @@ export default function PropertyMap({ leads, theme }) {
       {/* key={theme} forces remount so tile layer swaps on theme toggle */}
       <MapContainer
         key={theme}
-        center={BOULDER_CENTER}
+        center={mapCenter}
         zoom={11}
         style={{ height: '640px', width: '100%' }}
         scrollWheelZoom
