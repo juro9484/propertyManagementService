@@ -7,36 +7,14 @@ const TILE_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}
 const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
 const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 
-// City center coordinates — fallback when no geocoded coords available
-const CITY_CENTERS = {
-  boulder:        [40.015, -105.271],
-  longmont:       [40.167, -105.102],
-  louisville:     [39.978, -105.131],
-  lafayette:      [39.993, -105.089],
-  superior:       [39.952, -105.169],
-  erie:           [40.050, -105.048],
-  broomfield:     [39.921, -105.087],
-  lyons:          [40.224, -105.271],
-  nederland:      [39.961, -105.510],
-  unincorporated: [40.050, -105.300],
-}
-
 function resolveCoords(lead) {
-  // Check geocoded coords on all_properties first
+  // Only show real geocoded coordinates — no fake jitter pins
   const props = lead.all_properties || []
   for (const p of props) {
     if (p.lat != null && p.lng != null) return [p.lat, p.lng]
   }
-  // Lead-level coords
   if (lead.lat != null && lead.lng != null) return [lead.lat, lead.lng]
-  // City center fallback with jitter
-  const city = (lead.city || '').toLowerCase()
-  const center = CITY_CENTERS[city]
-  if (!center) return null
-  const seed = parseInt(lead.folio || lead.id) || 0
-  const jLat = ((seed % 83) / 83 - 0.5) * 0.06
-  const jLng = (((seed * 13) % 97) / 97 - 0.5) * 0.08
-  return [center[0] + jLat, center[1] + jLng]
+  return null
 }
 
 function pinColor(score) {

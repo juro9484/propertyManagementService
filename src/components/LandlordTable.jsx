@@ -7,28 +7,13 @@ const BOULDER_CENTER = [40.015, -105.271]
 const TILE_URL   = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
 const CARTO_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 
-const CITY_CENTERS = {
-  boulder:    [40.015, -105.271],
-  longmont:   [40.167, -105.102],
-  louisville: [39.978, -105.131],
-  lafayette:  [39.993, -105.089],
-  superior:   [39.952, -105.169],
-  erie:       [40.050, -105.048],
-  broomfield: [39.921, -105.087],
-}
-
 function baseAddress(addr) {
   return (addr ?? '').toUpperCase().replace(/\s+(#|APT|UNIT|STE|SUITE|FL|FLOOR)\b.*/g, '').trim()
 }
 
 function resolvePropCoords(prop) {
   if (prop.lat != null && prop.lng != null) return [prop.lat, prop.lng]
-  const center = CITY_CENTERS[(prop.city ?? '').toLowerCase()]
-  if (!center) return null
-  const seed = parseInt(prop.folio) || 0
-  const jLat = ((seed % 83) / 83 - 0.5) * 0.06
-  const jLng = (((seed * 13) % 97) / 97 - 0.5) * 0.08
-  return [center[0] + jLat, center[1] + jLng]
+  return null
 }
 
 // Returns unique properties for a lead (deduped by base address)
@@ -334,8 +319,6 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
     } catch (e) { console.error('Status update failed', e) }
   }
 
-  // Merge DB status with local overrides
-  const getLeadStatus = (lead) => statusOverrides[lead.id] ?? lead.status ?? 'new'
 
   const cities = useMemo(() => [...new Set(leads.map(l => l.city).filter(Boolean))].sort(), [leads])
 
