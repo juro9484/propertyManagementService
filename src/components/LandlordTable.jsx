@@ -350,9 +350,13 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
   const selectedCoords   = useMemo(() => selected ? uniqueLeadProps(selected).map(resolvePropCoords).filter(Boolean) : null, [selected])
   const selectedApprox   = selected ? !hasRealCoords(selected) : false
 
-  // One background pin per lead (primary property)
+  // One background pin per lead — use first geocoded property
   const allPins = useMemo(() =>
-    leads.map(l => ({ folio: l.folio, score: l.score, coords: resolvePropCoords(l) })).filter(p => p.coords)
+    leads.map(l => {
+      const props = l.all_properties || []
+      const geo = props.find(p => p.lat != null && p.lng != null)
+      return { folio: l.folio, score: l.score, coords: geo ? [geo.lat, geo.lng] : null }
+    }).filter(p => p.coords)
   , [leads])
 
   return (
