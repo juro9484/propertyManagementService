@@ -208,7 +208,7 @@ export default function App() {
                 }}
               >
                 {tab.label}
-                {!tab.adminOnly && (
+                {(i === 0 || i === 1) && (
                   <span style={{
                     marginLeft: '8px',
                     fontSize: '11px',
@@ -218,7 +218,7 @@ export default function App() {
                     backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
                     color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
                   }}>
-                    {i === 0 ? leads.length : i === 1 ? pipelineLeads.length : allLeads.length}
+                    {i === 0 ? leads.length : pipelineLeads.length}
                   </span>
                 )}
               </button>
