@@ -255,9 +255,14 @@ def _run_pipeline_inner(county: str, run_id: int):
             owner_name, prop_city, mail_city, mail_state, prop_count, acct_type, is_new
         )
 
-        mail_addr1 = primary.get("mailingAddr1", "")
+        mail_addr1 = primary.get("mailingAddr1", "").strip()
+        mail_addr2 = primary.get("mailingAddr2", "").strip()
         mail_zip = primary.get("mailingZip", "")
-        full_mail = f"{mail_addr1}, {mail_city}, {mail_state} {mail_zip}".strip(", ")
+        # Use addr2 if addr1 looks like a name/dept (not a street)
+        mail_street = mail_addr2 if mail_addr2 and not any(c.isdigit() for c in mail_addr1) else mail_addr1
+        if mail_addr2 and mail_street == mail_addr1:
+            mail_street = f"{mail_addr1}, {mail_addr2}"
+        full_mail = f"{mail_street}, {mail_city}, {mail_state} {mail_zip}".strip(", ")
         prop_address = build_address(primary)
 
         lead_row = (
