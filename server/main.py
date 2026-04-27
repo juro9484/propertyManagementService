@@ -323,8 +323,14 @@ def list_leads(
         conditions.append("l.score >= %s")
         params.append(min_score)
     if status:
-        conditions.append("l.status = %s")
-        params.append(status)
+        if status == "pipeline":
+            # All active statuses (not new, not closed)
+            conditions.append("l.status IN ('contacted', 'follow_up', 'meeting')")
+        elif status == "closed":
+            conditions.append("l.status IN ('converted', 'not_interested')")
+        else:
+            conditions.append("l.status = %s")
+            params.append(status)
     if search:
         conditions.append("(l.owner_name ILIKE %s OR l.property_address ILIKE %s OR l.city ILIKE %s)")
         q = f"%{search}%"

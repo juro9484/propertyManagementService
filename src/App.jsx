@@ -11,6 +11,7 @@ import { sampleLandlordData } from './sampleData'
 
 const TABS = [
   { label: 'Leads' },
+  { label: 'Pipeline' },
   { label: 'Property Map' },
   { label: 'Activity', adminOnly: true },
   { label: 'Settings', adminOnly: true },
@@ -22,6 +23,7 @@ export default function App() {
   })
   const [token, setToken]               = useState(() => localStorage.getItem('acpm_token'))
   const [landlordData, setLandlordData] = useState(null)
+  const [pipelineData, setPipelineData] = useState(null)
   const [loading, setLoading]           = useState(true)
   const [usingMock, setUsingMock]       = useState(false)
   const [activeTab, setActiveTab]       = useState(0)
@@ -47,26 +49,36 @@ export default function App() {
     setToken(null)
   }
 
+  const reshapeLeads = (apiData) => ({
+    generated_at: new Date().toISOString(),
+    total_records_processed: apiData.total,
+    new_owner_events: apiData.leads.filter(l => l.badges?.includes('NEW_OWNER')).length,
+    avg_score: apiData.leads.length
+      ? (apiData.leads.reduce((s, l) => s + l.score, 0) / apiData.leads.length).toFixed(1)
+      : 0,
+    leads: apiData.leads.map((l, i) => ({ ...l, rank: i + 1, folio: l.primary_folio || l.id })),
+  })
+
   const loadData = async () => {
     setLoading(true)
     try {
-      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&city=&county=${county}`, { headers: getAuthHeaders() })
-      if (apiRes.status === 401) { handleLogout(); return }
-      if (apiRes.ok) {
-        const apiData = await apiRes.json()
-        setLandlordData({
-          generated_at: new Date().toISOString(),
-          total_records_processed: apiData.total,
-          new_owner_events: apiData.leads.filter(l => l.badges?.includes('NEW_OWNER')).length,
-          avg_score: apiData.leads.length
-            ? (apiData.leads.reduce((s, l) => s + l.score, 0) / apiData.leads.length).toFixed(1)
-            : 0,
-          leads: apiData.leads.map((l, i) => ({ ...l, rank: i + 1, folio: l.primary_folio || l.id })),
-        })
-        setUsingMock(false)
-        setLoading(false)
-        return
+      // Fetch fresh leads (status=new) and pipeline leads (status!=new) in parallel
+      const [newRes, pipeRes] = await Promise.all([
+        fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&county=${county}&status=new`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&county=${county}&status=pipeline`, { headers: getAuthHeaders() }),
+      ])
+
+      if (newRes.status === 401) { handleLogout(); return }
+
+      if (newRes.ok) {
+        setLandlordData(reshapeLeads(await newRes.json()))
       }
+      if (pipeRes.ok) {
+        setPipelineData(reshapeLeads(await pipeRes.json()))
+      }
+      setUsingMock(false)
+      setLoading(false)
+      return
     } catch { /* API not available, fall through */ }
 
     try {
@@ -97,9 +109,10 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  const leads    = landlordData?.leads ?? []
-  const enrichedCount = leads.filter(l => l.email || l.phone).length
-  const newOwnerCount = landlordData?.new_owner_events ?? 0
+  const leads         = landlordData?.leads ?? []
+  const pipelineLeads = pipelineData?.leads ?? []
+  const allLeads      = [...leads, ...pipelineLeads]
+  const enrichedCount = allLeads.filter(l => l.email || l.phone).length
   const avgScore = leads.length
     ? (leads.reduce((s, l) => s + l.score, 0) / leads.length).toFixed(1)
     : 0
@@ -168,7 +181,7 @@ export default function App() {
 
         <KPICards
           totalLandlords={leads.length}
-          newOwnerEvents={newOwnerCount}
+          newOwnerEvents={pipelineLeads.length}
           totalRealtors={enrichedCount}
           avgScore={Number(avgScore)}
           loading={loading}
@@ -205,7 +218,7 @@ export default function App() {
                     backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
                     color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
                   }}>
-                    {i === 0 ? leads.length : leads.length}
+                    {i === 0 ? leads.length : i === 1 ? pipelineLeads.length : allLeads.length}
                   </span>
                 )}
               </button>
@@ -223,15 +236,18 @@ export default function App() {
         ) : (
           <>
             {activeTab === 0 && (
-              <LandlordTable leads={leads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} />
+              <LandlordTable leads={leads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} onStatusChange={loadData} />
             )}
             {activeTab === 1 && (
-              <PropertyMap leads={leads} theme={theme} county={county} />
+              <LandlordTable leads={pipelineLeads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} onStatusChange={loadData} />
             )}
-            {activeTab === 2 && user?.role === 'admin' && (
-              <ActivityLog />
+            {activeTab === 2 && (
+              <PropertyMap leads={allLeads} theme={theme} county={county} />
             )}
             {activeTab === 3 && user?.role === 'admin' && (
+              <ActivityLog />
+            )}
+            {activeTab === 4 && user?.role === 'admin' && (
               <UserManagement />
             )}
           </>

@@ -288,7 +288,7 @@ function DetailPanel({ lead, onOutreach }) {
 // ── Main component ───────────────────────────────────────────────────────────
 const PAGE_SIZE = 20
 
-export default function LandlordTable({ leads, onOutreach, theme, county }) {
+export default function LandlordTable({ leads, onOutreach, theme, county, onStatusChange: onStatusChangeParent }) {
   const defaultCenter = COUNTY_CENTERS[county] || COUNTY_CENTERS.boulder
   const [selectedFolio, setSelectedFolio] = useState(() => leads[0]?.folio ?? null)
   const [sortDir, setSortDir]             = useState('desc')
@@ -311,15 +311,15 @@ export default function LandlordTable({ leads, onOutreach, theme, county }) {
   const [statusOverrides, setStatusOverrides] = useState({})
 
   const handleStatusChange = async (leadId, next) => {
-    // Optimistic update via local state
     setStatusOverrides(prev => ({ ...prev, [leadId]: next }))
-    // Persist to DB
     try {
       await fetch(`${API_BASE}/api/leads/${leadId}/status`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         body: JSON.stringify({ status: next }),
       })
+      // Reload both tabs so lead moves between Leads ↔ Pipeline
+      if (onStatusChangeParent) setTimeout(onStatusChangeParent, 300)
     } catch (e) { console.error('Status update failed', e) }
   }
 
