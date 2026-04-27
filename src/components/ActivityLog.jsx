@@ -19,9 +19,17 @@ const ACTION_CFG = {
   note:            { label: 'Note', color: 'var(--tx-3)' },
 }
 
+const RANGES = [
+  { label: '7 days', value: 7 },
+  { label: '30 days', value: 30 },
+  { label: '90 days', value: 90 },
+  { label: 'All time', value: 365 },
+]
+
 export default function ActivityLog() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
+  const [days, setDays]       = useState(30)
 
   const API_BASE = import.meta.env.VITE_API_URL || ''
   const headers = {
@@ -29,18 +37,39 @@ export default function ActivityLog() {
   }
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/analytics/usage`, { headers })
+    setLoading(true)
+    fetch(`${API_BASE}/api/analytics/usage?days=${days}`, { headers })
       .then(r => r.json())
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [days])
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx-4)', fontSize: '12px' }}>Loading analytics...</div>
   if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--tx-4)', fontSize: '12px' }}>Failed to load</div>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+      {/* Time range selector */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontSize: '11px', color: 'var(--tx-4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Range</span>
+        {RANGES.map(r => (
+          <button
+            key={r.value}
+            onClick={() => setDays(r.value)}
+            style={{
+              fontSize: '11px', padding: '3px 10px', borderRadius: '3px', cursor: 'pointer',
+              backgroundColor: days === r.value ? 'var(--gold-bg)' : 'transparent',
+              color: days === r.value ? 'var(--gold)' : 'var(--tx-4)',
+              border: `1px solid ${days === r.value ? 'var(--gold-border)' : 'var(--bd)'}`,
+              fontWeight: days === r.value ? 600 : 400,
+            }}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
 
       {/* User stats */}
       <div className="panel" style={{ padding: '20px' }}>

@@ -690,27 +690,29 @@ def outreach_history(lead_id: int):
 # ── Usage Analytics (admin only) ──────────────────────────────────────────────
 
 @app.get("/api/analytics/usage")
-def usage_analytics(request: Request):
+def usage_analytics(request: Request, days: int = Query(30, ge=1, le=365)):
     user = getattr(request.state, "user", None)
     if not user or user.get("role") != "admin":
         raise HTTPException(403, "Admin only")
 
     with get_cursor() as cur:
+        cutoff = f"{days} days"
+
         # Per-user activity summary
         cur.execute("""
             SELECT u.id, u.name, u.email, u.last_login,
                 (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
-                    AND la.created_at > NOW() - INTERVAL '7 days') as actions_7d,
+                    AND la.created_at > NOW() - %s::interval) as actions_period,
                 (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
                     AND la.created_at > NOW() - INTERVAL '24 hours') as actions_24h,
                 (SELECT COUNT(*) FROM outreach o
                     JOIN lead_activity la2 ON la2.lead_id = o.lead_id
                     AND la2.user_id = u.id AND la2.action = 'email_generated'
                     WHERE o.channel = 'ai_draft'
-                    AND o.created_at > NOW() - INTERVAL '7 days') as emails_7d
+                    AND o.created_at > NOW() - %s::interval) as emails_period
             FROM users u WHERE u.active = TRUE
-            ORDER BY actions_7d DESC
-        """)
+            ORDER BY actions_period DESC
+        """, [cutoff, cutoff])
         user_stats = [dict(r) for r in cur.fetchall()]
 
         # Recent activity feed
@@ -720,22 +722,23 @@ def usage_analytics(request: Request):
             FROM lead_activity la
             LEFT JOIN users u ON u.id = la.user_id
             LEFT JOIN leads l ON l.id = la.lead_id
+            WHERE la.created_at > NOW() - %s::interval
             ORDER BY la.created_at DESC
-            LIMIT 50
-        """)
+            LIMIT 100
+        """, [cutoff])
         recent = [dict(r) for r in cur.fetchall()]
 
-        # Daily stats (last 7 days)
+        # Daily stats
         cur.execute("""
             SELECT DATE(created_at) as day,
                 COUNT(*) as total_actions,
                 COUNT(CASE WHEN action = 'status_change' THEN 1 END) as status_changes,
                 COUNT(CASE WHEN action = 'email_generated' THEN 1 END) as emails_generated
             FROM lead_activity
-            WHERE created_at > NOW() - INTERVAL '7 days'
+            WHERE created_at > NOW() - %s::interval
             GROUP BY DATE(created_at)
             ORDER BY day DESC
-        """)
+        """, [cutoff])
         daily = [dict(r) for r in cur.fetchall()]
 
         # Total emails generated (all time)
@@ -743,6 +746,7 @@ def usage_analytics(request: Request):
         total_emails = cur.fetchone()["c"]
 
     return {
+        "days": days,
         "user_stats": user_stats,
         "recent_activity": recent,
         "daily_stats": daily,
