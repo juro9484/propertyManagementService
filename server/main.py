@@ -108,6 +108,35 @@ def auth_create_user(body: CreateUserRequest, request: Request):
         raise HTTPException(403, "Admin only")
     return create_user(body.email, body.name, body.password, body.role)
 
+class ResetPasswordRequest(BaseModel):
+    password: str
+
+@app.patch("/api/auth/users/{user_id}/password")
+def auth_reset_password(user_id: int, body: ResetPasswordRequest, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    from auth import hash_password
+    hashed = hash_password(body.password)
+    with get_cursor(commit=True) as cur:
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s RETURNING id", [hashed, user_id])
+        if not cur.fetchone():
+            raise HTTPException(404, "User not found")
+    return {"ok": True}
+
+@app.delete("/api/auth/users/{user_id}")
+def auth_delete_user(user_id: int, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+    if user.get("user_id") == user_id:
+        raise HTTPException(400, "Cannot delete yourself")
+    with get_cursor(commit=True) as cur:
+        cur.execute("DELETE FROM users WHERE id = %s RETURNING id", [user_id])
+        if not cur.fetchone():
+            raise HTTPException(404, "User not found")
+    return {"ok": True}
+
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     user = getattr(request.state, "user", None)

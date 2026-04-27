@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Shield, Eye, Briefcase } from 'lucide-react'
+import { UserPlus, Trash2, Shield, Eye, Briefcase, KeyRound } from 'lucide-react'
 
 const ROLE_CFG = {
   admin:   { label: 'Admin',   icon: Shield,    color: 'var(--b-red-tx)',    bg: 'var(--b-red-bg)',    bd: 'var(--b-red-bd)' },
@@ -31,6 +31,31 @@ export default function UserManagement() {
   }
 
   useEffect(() => { loadUsers() }, [])
+
+  const handleResetPassword = async (userId, name) => {
+    const newPass = prompt(`New password for ${name}:`)
+    if (!newPass) return
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/users/${userId}/password`, {
+        method: 'PATCH', headers,
+        body: JSON.stringify({ password: newPass }),
+      })
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+      setSuccess(`Password reset for ${name}`)
+    } catch (err) { setError(err.message) }
+  }
+
+  const handleDeleteUser = async (userId, name) => {
+    if (!confirm(`Delete ${name}? This cannot be undone.`)) return
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/users/${userId}`, {
+        method: 'DELETE', headers,
+      })
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed')
+      setSuccess(`Deleted ${name}`)
+      loadUsers()
+    } catch (err) { setError(err.message) }
+  }
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -135,7 +160,7 @@ export default function UserManagement() {
                   <p style={{ fontSize: '11px', color: 'var(--tx-4)', margin: '1px 0 0' }}>{u.email}</p>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{
                   fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '3px',
                   backgroundColor: rc.bg, color: rc.color, border: `1px solid ${rc.bd}`, textTransform: 'uppercase',
@@ -144,9 +169,17 @@ export default function UserManagement() {
                 </span>
                 {u.last_login && (
                   <span style={{ fontSize: '10px', color: 'var(--tx-4)' }}>
-                    Last login: {new Date(u.last_login).toLocaleDateString()}
+                    {new Date(u.last_login).toLocaleDateString()}
                   </span>
                 )}
+                <button className="btn-ghost" style={{ padding: '3px 6px' }} title="Reset password"
+                  onClick={() => handleResetPassword(u.id, u.name)}>
+                  <KeyRound size={11} style={{ color: 'var(--tx-3)' }} />
+                </button>
+                <button className="btn-ghost" style={{ padding: '3px 6px' }} title="Delete user"
+                  onClick={() => handleDeleteUser(u.id, u.name)}>
+                  <Trash2 size={11} style={{ color: 'var(--b-red-tx)' }} />
+                </button>
               </div>
             </div>
           )
