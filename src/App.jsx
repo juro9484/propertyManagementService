@@ -25,6 +25,7 @@ export default function App() {
   const [activeTab, setActiveTab]       = useState(0)
   const [modal, setModal]               = useState(null)
   const [theme, setTheme]               = useState('light')
+  const [county, setCounty]             = useState('boulder')
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -47,7 +48,7 @@ export default function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc`, { headers: getAuthHeaders() })
+      const apiRes = await fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&city=&county=${county}`, { headers: getAuthHeaders() })
       if (apiRes.status === 401) { handleLogout(); return }
       if (apiRes.ok) {
         const apiData = await apiRes.json()
@@ -84,10 +85,10 @@ export default function App() {
     setToken(tokenStr)
   }
 
-  // Load data whenever token changes (including after login)
+  // Load data whenever token or county changes
   useEffect(() => {
     if (token) loadData()
-  }, [token])
+  }, [token, county])
 
   // Not logged in → show login page
   if (!user || !token) {
@@ -120,10 +121,16 @@ export default function App() {
         <div className="max-w-[1600px] mx-auto px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/img_55573.png" alt="All County" style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
-            <div>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--tx-1)' }}>Prospect Pipeline</span>
-              <span style={{ color: 'var(--tx-4)', fontSize: '11px', marginLeft: '8px' }}>Boulder County</span>
-            </div>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--tx-1)' }}>Prospect Pipeline</span>
+            <select
+              className="field"
+              value={county}
+              onChange={e => setCounty(e.target.value)}
+              style={{ fontSize: '12px', padding: '4px 24px 4px 8px', minWidth: 0, fontWeight: 500 }}
+            >
+              <option value="boulder">Boulder County</option>
+              <option value="larimer">Fort Collins (Larimer)</option>
+            </select>
           </div>
 
           <div className="flex items-center gap-3">

@@ -253,6 +253,7 @@ def get_stats():
 def list_leads(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
+    county: Optional[str] = None,
     city: Optional[str] = None,
     min_score: int = 0,
     status: Optional[str] = None,
@@ -262,6 +263,9 @@ def list_leads(
     conditions = []
     params = []
 
+    if county:
+        conditions.append("l.county = %s")
+        params.append(county)
     if city:
         conditions.append("l.city = %s")
         params.append(city)
