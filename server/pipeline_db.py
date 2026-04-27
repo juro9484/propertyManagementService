@@ -174,19 +174,30 @@ def run_pipeline(county: str = "boulder"):
         raise
 
 
+RESIDENTIAL_TYPES = {
+    # Boulder
+    "residential", "residential condo", "apartment", "affordable res",
+    "manufactured home", "mixed use", "ag with non-integral res",
+    "bed & break", "imp only",
+    # Larimer
+    "multiple unit", "mobile home", "mh park",
+}
+
+
 def _run_pipeline_inner(county: str, run_id: int):
     csv_path = DATA_DIR / f"{county}_records.csv"
     if not csv_path.exists():
         raise FileNotFoundError(f"{csv_path} not found")
 
-    # Load CSV
-    records = []
+    # Load CSV — residential properties only
+    all_records = []
     with open(csv_path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            records.append({k.strip(): v.strip() for k, v in row.items() if k is not None})
+            all_records.append({k.strip(): v.strip() for k, v in row.items() if k is not None})
 
-    print(f"[PIPELINE] Loaded {len(records)} records from {csv_path}")
+    records = [r for r in all_records if r.get("account_type", "").lower() in RESIDENTIAL_TYPES]
+    print(f"[PIPELINE] Loaded {len(all_records)} records, {len(records)} residential from {csv_path}")
 
     # Detect new owners by comparing against current DB state
     new_owner_folios = _detect_new_owners_from_db(records, county)
