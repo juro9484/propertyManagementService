@@ -346,15 +346,16 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
       rows = rows.filter(l =>
         l.owner_name?.toLowerCase().includes(q) ||
         l.property_address?.toLowerCase().includes(q) ||
-        l.city?.toLowerCase().includes(q)
+        l.city?.toLowerCase().includes(q) ||
+        l.email?.toLowerCase().includes(q)
       )
     }
     if (cityFilter)   rows = rows.filter(l => l.city === cityFilter)
-    if (minScore)     rows = rows.filter(l => l.score >= minScore)
+    if (minScore > 0) rows = rows.filter(l => l.score >= Number(minScore))
     if (statusFilter) rows = rows.filter(l => (statusOverrides[l.id] ?? l.status ?? 'new') === statusFilter)
     rows.sort((a, b) => sortDir === 'desc' ? b.score - a.score : a.score - b.score)
     return rows
-  }, [leads, search, cityFilter, minScore, sortDir, statusFilter])
+  }, [leads, search, cityFilter, minScore, sortDir, statusFilter, statusOverrides])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -397,10 +398,10 @@ export default function LandlordTable({ leads, onOutreach, theme }) {
             </select>
             <select className="field" style={{ flex: 1, minWidth: 0, fontSize: '11px' }} value={minScore} onChange={e => { setMinScore(Number(e.target.value)); resetPage() }}>
               <option value={0}>Any Score</option>
-              <option value={5}>5+</option>
               <option value={8}>8+</option>
-              <option value={11}>11+</option>
+              <option value={12}>12+</option>
               <option value={14}>14+</option>
+              <option value={16}>16+</option>
             </select>
             <select className="field" style={{ flex: 1, minWidth: 0, fontSize: '11px' }} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); resetPage() }}>
               <option value="">All</option>

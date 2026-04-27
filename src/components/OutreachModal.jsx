@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Copy, Check, ChevronLeft, ChevronRight, RefreshCw, Send, AlertCircle } from 'lucide-react'
+import { X, Copy, Check, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 
 function generateLandlordEmail(lead) {
   const isLLC    = lead.badges?.includes('LLC')
@@ -146,14 +146,8 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
   const [email, setEmail]           = useState('')
   const [copied, setCopied]         = useState(false)
   const [currentIdx, setCurrentIdx] = useState(null)
-  const [sendMode, setSendMode]     = useState(false)
   const [generating, setGenerating] = useState(false)
-  // verify: null | 'checking' | { deliverability, line1, city, state, zip } | 'error'
-  const [verify, setVerify]         = useState(null)
-  const [verifyError, setVerifyError] = useState('')
-  const [sendStatus, setSendStatus] = useState(null) // null | 'sending' | 'sent' | 'error'
-  const [sendResult, setSendResult] = useState(null)
-  const [sendError, setSendError]   = useState('')
+  const [tone, setTone]             = useState('professional')
   const textareaRef = useRef(null)
 
   const getAuthHeaders = () => {
@@ -208,40 +202,6 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
     catch { textareaRef.current?.select(); document.execCommand('copy') }
     setCopied(true)
     setTimeout(() => setCopied(false), 2200)
-  }
-
-  const handleVerify = async () => {
-    setVerify('checking')
-    setVerifyError('')
-    try {
-      const result = await apiVerifyAddress(lead)
-      setVerify(result)
-    } catch (err) {
-      setVerify('error')
-      setVerifyError(err.message)
-    }
-  }
-
-  const handleSend = async () => {
-    setSendStatus('sending')
-    setSendError('')
-    try {
-      const result = await apiSendLetter(lead, email)
-      setSendStatus('sent')
-      setSendResult(result)
-    } catch (err) {
-      setSendStatus('error')
-      setSendError(err.message)
-    }
-  }
-
-  const openSendMode = () => {
-    setSendMode(true)
-    setVerify(null)
-    setVerifyError('')
-    setSendStatus(null)
-    setSendResult(null)
-    setSendError('')
   }
 
   const displayName = isRealtor ? lead.name : lead.owner_name
@@ -320,45 +280,51 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
           </div>
         )}
 
-        {/* Email editor */}
-        <div style={{ padding: '16px 20px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <label style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              {email ? 'Letter Draft — edit before sending' : 'Generate a personalized outreach letter'}
-            </label>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              {email && (
-                <button className="btn-ghost" style={{ fontSize: '11px', padding: '4px 8px' }}
-                  onClick={() => handleGenerate('professional')} disabled={generating}>
-                  <RefreshCw size={10} className={generating ? 'animate-spin' : ''} /> Regenerate
-                </button>
-              )}
-            </div>
+        {/* Tone selector + generate controls */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Tone</span>
+          {['professional', 'friendly', 'direct'].map(t => (
+            <button
+              key={t}
+              onClick={() => setTone(t)}
+              style={{
+                fontSize: '11px', padding: '3px 10px', borderRadius: '3px', cursor: 'pointer',
+                backgroundColor: tone === t ? 'var(--gold-bg)' : 'transparent',
+                color: tone === t ? 'var(--gold)' : 'var(--tx-4)',
+                border: `1px solid ${tone === t ? 'var(--gold-border)' : 'var(--bd)'}`,
+                fontWeight: tone === t ? 600 : 400, textTransform: 'capitalize',
+              }}
+            >
+              {t}
+            </button>
+          ))}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+            <button
+              className="btn-gold"
+              style={{ fontSize: '11px', padding: '5px 14px', opacity: generating ? 0.5 : 1 }}
+              disabled={generating}
+              onClick={() => handleGenerate(tone)}
+            >
+              {generating ? <><RefreshCw size={10} className="animate-spin" /> Generating...</> :
+               email ? <><RefreshCw size={10} /> Regenerate</> : 'Generate Letter'}
+            </button>
           </div>
+        </div>
 
+        {/* Email editor */}
+        <div style={{ padding: '0 20px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {!email && !generating ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', minHeight: '420px' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
               <p style={{ fontSize: '13px', color: 'var(--tx-4)', margin: 0, textAlign: 'center' }}>
-                AI will write a personalized letter based on this lead's<br />properties, location, score, and ownership signals.
+                Select a tone above and click Generate Letter
               </p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-gold" style={{ fontSize: '12px', padding: '8px 20px' }} onClick={() => handleGenerate('professional')}>
-                  Generate Letter
-                </button>
-                <button className="btn-ghost" style={{ fontSize: '11px', padding: '8px 12px' }} onClick={() => handleGenerate('friendly')}>
-                  Friendly tone
-                </button>
-                <button className="btn-ghost" style={{ fontSize: '11px', padding: '8px 12px' }} onClick={() => handleGenerate('direct')}>
-                  Direct tone
-                </button>
-              </div>
               <button className="btn-ghost" style={{ fontSize: '11px', color: 'var(--tx-4)' }}
                 onClick={() => setEmail(generateLandlordEmail(lead))}>
-                Use basic template instead
+                or use basic template
               </button>
             </div>
           ) : generating ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '420px' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                 <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--gold)' }} />
                 <p style={{ fontSize: '12px', color: 'var(--tx-4)', margin: 0 }}>Writing personalized letter...</p>
@@ -368,7 +334,7 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
             <textarea
               ref={textareaRef}
               className="field"
-              style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: '420px' }}
+              style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: 0, marginTop: '12px', marginBottom: '12px', overflowY: 'auto' }}
               value={email}
               onChange={e => setEmail(e.target.value)}
               spellCheck
@@ -376,122 +342,12 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
           )}
         </div>
 
-        {/* Send via Mail panel */}
-        {sendMode && (
-          <div style={{ borderTop: '1px solid var(--bd)', backgroundColor: 'var(--bg-raised)', padding: '16px 20px', flexShrink: 0 }}>
-
-            {sendStatus === 'sent' ? (
-              /* ── Success state ── */
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--b-green-bg)', border: '1px solid var(--b-green-bd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Check size={15} style={{ color: 'var(--b-green-tx)' }} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--b-green-tx)', margin: 0 }}>Letter queued for delivery</p>
-                  <p style={{ fontSize: '11px', color: 'var(--tx-4)', margin: '3px 0 0' }}>
-                    {sendResult?.expected_delivery_date
-                      ? `Expected delivery: ${new Date(sendResult.expected_delivery_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                      : 'Typically delivered within 5–7 business days'}
-                    {sendResult?.id && <span style={{ marginLeft: '10px', fontFamily: 'monospace', fontSize: '10px', color: 'var(--tx-4)' }}>#{sendResult.id}</span>}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Header row */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--tx-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Send Physical Letter
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--tx-4)' }}>Powered by Lob · ~$0.87/letter · 5–7 business days</span>
-                </div>
-
-                {/* Address + verify row */}
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '10px', color: 'var(--tx-4)', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mailing address</p>
-                    {verify && verify !== 'checking' && verify !== 'error' ? (
-                      /* Verified — show standardized address */
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                        <Check size={11} style={{ color: 'var(--b-green-tx)', marginTop: '2px', flexShrink: 0 }} />
-                        <div>
-                          <p style={{ fontSize: '12px', color: 'var(--tx-1)', margin: 0, lineHeight: 1.5 }}>
-                            {lead.owner_name}<br />
-                            {verify.line1}, {verify.city}, {verify.state} {verify.zip}
-                          </p>
-                          {verify.deliverability !== 'deliverable' && (
-                            <p style={{ fontSize: '10px', color: 'var(--b-amber-tx)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <AlertCircle size={10} /> {verify.deliverability?.replace(/_/g, ' ')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Unverified — show raw address */
-                      <p style={{ fontSize: '12px', color: 'var(--tx-2)', margin: 0, lineHeight: 1.5 }}>
-                        {lead.owner_name}<br />
-                        {lead.mailing_address
-                          ? <>{lead.mailing_address}{lead.mailing_city ? `, ${lead.mailing_city}` : ''}{lead.mailing_state ? ` ${lead.mailing_state}` : ''}</>
-                          : <span style={{ color: 'var(--b-amber-tx)', fontSize: '11px' }}>No mailing address — property address will be used</span>
-                        }
-                      </p>
-                    )}
-                    {verify === 'error' && (
-                      <p style={{ fontSize: '11px', color: 'var(--b-red-tx)', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <AlertCircle size={10} /> {verifyError}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Action buttons */}
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'center', paddingTop: '18px' }}>
-                    {/* Step 1: Verify */}
-                    {(!verify || verify === 'error') && (
-                      <button
-                        className="btn-primary"
-                        style={{ fontSize: '12px', padding: '6px 14px' }}
-                        onClick={handleVerify}
-                      >
-                        {verify === 'checking' ? <><RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> Checking…</> : 'Verify Address'}
-                      </button>
-                    )}
-                    {verify === 'checking' && (
-                      <span style={{ fontSize: '12px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <RefreshCw size={11} /> Verifying…
-                      </span>
-                    )}
-                    {/* Step 2: Send (only after verify) */}
-                    {verify && verify !== 'checking' && verify !== 'error' && (
-                      <button
-                        className="btn-gold"
-                        style={{ fontSize: '12px', padding: '6px 16px', opacity: sendStatus === 'sending' ? 0.5 : 1 }}
-                        disabled={sendStatus === 'sending'}
-                        onClick={handleSend}
-                      >
-                        <Send size={12} />
-                        {sendStatus === 'sending' ? 'Sending…' : 'Confirm & Send'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {sendStatus === 'error' && (
-                  <p style={{ fontSize: '11px', color: 'var(--b-red-tx)', margin: '10px 0 0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <AlertCircle size={10} /> {sendError}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
         {/* Footer */}
         <div style={{
-          padding: '12px 20px', borderTop: '1px solid var(--bd)',
+          padding: '10px 20px', borderTop: '1px solid var(--bd)',
           backgroundColor: 'var(--bg-raised)', borderRadius: '0 0 8px 8px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
         }}>
-          {/* Prev / Next — landlord only */}
           {!isRealtor && allLeads && currentIdx !== null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <button className="btn-ghost" style={{ fontSize: '11px', padding: '4px 10px', opacity: currentIdx <= 0 ? 0.3 : 1 }}
@@ -510,13 +366,6 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button className="btn-ghost" style={{ fontSize: '12px' }} onClick={onClose}>Close</button>
-            <button
-              className="btn-ghost"
-              style={{ fontSize: '12px', color: sendMode ? 'var(--gold)' : 'var(--tx-3)', borderColor: sendMode ? 'var(--gold-border)' : 'transparent' }}
-              onClick={() => sendMode ? setSendMode(false) : openSendMode()}
-            >
-              <Send size={12} /> Send Letter
-            </button>
             <button
               className={copied ? undefined : 'btn-gold'}
               style={copied ? {

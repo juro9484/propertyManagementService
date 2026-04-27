@@ -96,7 +96,7 @@ export default function App() {
 
   const leads    = landlordData?.leads ?? []
   const enrichedCount = leads.filter(l => l.email || l.phone).length
-  const newOwnerCount = leads.filter(l => l.badges?.includes('NEW_OWNER')).length
+  const newOwnerCount = landlordData?.new_owner_events ?? 0
   const avgScore = leads.length
     ? (leads.reduce((s, l) => s + l.score, 0) / leads.length).toFixed(1)
     : 0
