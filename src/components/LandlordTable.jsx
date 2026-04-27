@@ -101,7 +101,7 @@ function Badge({ type }) {
 }
 
 // ── Left panel: compact lead card ────────────────────────────────────────────
-function LeadCard({ lead, selected, onSelect, onStatusChange, statusOverride }) {
+function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusOverride }) {
   const status    = statusOverride ?? lead.status ?? 'new'
   const sc        = STATUS_CFG[status] ?? STATUS_CFG.new
   const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
@@ -140,9 +140,18 @@ function LeadCard({ lead, selected, onSelect, onStatusChange, statusOverride }) 
             </div>
           )}
         </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
-          <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{lead.rank}</div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flexShrink: 0 }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
+            <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{lead.rank}</div>
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss(lead.id) }}
+            title="Dismiss lead"
+            style={{ padding: '2px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-4)', lineHeight: 1, opacity: 0.4, fontSize: '16px' }}
+          >
+            ×
+          </button>
         </div>
       </div>
 
@@ -297,6 +306,8 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
   const [search, setSearch]               = useState('')
   const [page, setPage]                   = useState(1)
   const [statusFilter, setStatusFilter]   = useState('')
+  const [dismissedId, setDismissedId]     = useState(null)
+  const [undoTimer, setUndoTimer]         = useState(null)
 
   const API_BASE = import.meta.env.VITE_API_URL || ''
   const getAuthHeaders = () => {
@@ -318,9 +329,34 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
         headers: getAuthHeaders(),
         body: JSON.stringify({ status: next }),
       })
-      // Reload both tabs so lead moves between Leads ↔ Pipeline
       if (onStatusChangeParent) setTimeout(onStatusChangeParent, 300)
     } catch (e) { console.error('Status update failed', e) }
+  }
+
+  const handleDismiss = (leadId) => {
+    // Hide immediately (optimistic)
+    setDismissedId(leadId)
+    // Clear any existing timer
+    if (undoTimer) clearTimeout(undoTimer)
+    // After 5 seconds, actually persist the dismissal
+    const timer = setTimeout(async () => {
+      try {
+        await fetch(`${API_BASE}/api/leads/${leadId}/status`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ status: 'not_interested' }),
+        })
+        if (onStatusChangeParent) onStatusChangeParent()
+      } catch (e) { console.error('Dismiss failed', e) }
+      setDismissedId(null)
+    }, 5000)
+    setUndoTimer(timer)
+  }
+
+  const handleUndo = () => {
+    if (undoTimer) clearTimeout(undoTimer)
+    setDismissedId(null)
+    setUndoTimer(null)
   }
 
 
@@ -340,9 +376,10 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
     if (cityFilter)   rows = rows.filter(l => l.city === cityFilter)
     if (minScore > 0) rows = rows.filter(l => l.score >= Number(minScore))
     if (statusFilter) rows = rows.filter(l => (statusOverrides[l.id] ?? l.status ?? 'new') === statusFilter)
+    if (dismissedId) rows = rows.filter(l => l.id !== dismissedId)
     rows.sort((a, b) => sortDir === 'desc' ? b.score - a.score : a.score - b.score)
     return rows
-  }, [leads, search, cityFilter, minScore, sortDir, statusFilter, statusOverrides])
+  }, [leads, search, cityFilter, minScore, sortDir, statusFilter, statusOverrides, dismissedId])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -429,10 +466,27 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
               selected={selectedFolio === lead.folio}
               onSelect={() => setSelectedFolio(lead.folio)}
               onStatusChange={handleStatusChange}
+              onDismiss={handleDismiss}
               statusOverride={statusOverrides[lead.id]}
             />
           ))}
         </div>
+
+        {/* Undo toast */}
+        {dismissedId && (
+          <div style={{
+            padding: '8px 12px', borderTop: '1px solid var(--bd)', backgroundColor: 'var(--bg-raised)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: '11px', color: 'var(--tx-3)' }}>Lead dismissed</span>
+            <button
+              onClick={handleUndo}
+              style={{ fontSize: '11px', fontWeight: 600, color: 'var(--gold)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 8px' }}
+            >
+              Undo
+            </button>
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
