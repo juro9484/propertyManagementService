@@ -349,7 +349,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
         if (onStatusChangeParent) onStatusChangeParent()
       } catch (e) { console.error('Dismiss failed', e) }
       setDismissedId(null)
-    }, 5000)
+    }, 10000)
     setUndoTimer(timer)
   }
 
