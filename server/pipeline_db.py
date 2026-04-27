@@ -338,22 +338,24 @@ def _run_pipeline_inner(county: str, run_id: int):
                     WHERE lead_id = %s AND folio = %s
                 """, [lat, lng, lead_id, folio])
 
-    # ── Step 3: Skip-trace top 200 leads (all displayed leads get contact info)
+    # ── Step 3: Skip-trace unenriched leads in the top 200 ─────────────────
     enrich_n = int(os.environ.get("TOP_LEADS_COUNT", "200"))
     tracerfy_key = os.environ.get("TRACERFY_API_KEY", "")
     leads_enriched = 0
     if tracerfy_key:
         from enrichment import enrich_lead as tracerfy_enrich
+        # Get top 200 by score, then filter to only unenriched
         with get_cursor() as cur:
             cur.execute("""
-                SELECT * FROM leads
-                WHERE county = %s AND enriched_at IS NULL
-                ORDER BY score DESC
-                LIMIT %s
+                SELECT * FROM (
+                    SELECT * FROM leads WHERE county = %s
+                    ORDER BY score DESC LIMIT %s
+                ) top
+                WHERE enriched_at IS NULL
             """, [county, enrich_n])
             unenriched = cur.fetchall()
 
-        print(f"[PIPELINE] Skip-tracing {len(unenriched)} leads via Tracerfy")
+        print(f"[PIPELINE] Skip-tracing {len(unenriched)} unenriched leads from top {enrich_n}")
         for lead in unenriched:
             result = tracerfy_enrich(dict(lead), tracerfy_key)
             if result.get("enriched"):
