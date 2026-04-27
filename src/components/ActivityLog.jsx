@@ -76,36 +76,45 @@ export default function ActivityLog() {
         <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--tx-1)', margin: '0 0 14px' }}>
           Team Usage
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
-          {data.user_stats.map(u => (
-            <div key={u.id} style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--bd)', borderRadius: '6px', padding: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--tx-1)', margin: 0 }}>{u.name}</p>
-                  <p style={{ fontSize: '10px', color: 'var(--tx-4)', margin: '2px 0 0' }}>{u.email}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+          {data.user_stats.map(u => {
+            const stats = [
+              { label: 'Emails', value: u.emails_generated, color: 'var(--b-purple-tx)' },
+              { label: 'Contacted', value: u.marked_contacted, color: 'var(--b-blue-tx)' },
+              { label: 'Follow Up', value: u.marked_follow_up, color: 'var(--b-amber-tx)' },
+              { label: 'Meeting', value: u.marked_meeting, color: 'var(--b-purple-tx)' },
+              { label: 'Converted', value: u.marked_converted, color: 'var(--b-green-tx)' },
+              { label: 'Not Interested', value: u.marked_not_interested, color: 'var(--b-red-tx)' },
+            ].filter(s => s.value > 0)
+
+            return (
+              <div key={u.id} style={{ backgroundColor: 'var(--bg-raised)', border: '1px solid var(--bd)', borderRadius: '6px', padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <div>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--tx-1)', margin: 0 }}>{u.name}</p>
+                    <p style={{ fontSize: '10px', color: 'var(--tx-4)', margin: '2px 0 0' }}>{u.email}</p>
+                  </div>
+                  {u.last_login && (
+                    <span style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      <Clock size={9} /> {timeAgo(u.last_login)}
+                    </span>
+                  )}
                 </div>
-                {u.last_login && (
-                  <span style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                    <Clock size={9} /> {timeAgo(u.last_login)}
-                  </span>
+                {stats.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {stats.map(s => (
+                      <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                        <span style={{ fontWeight: 700, color: s.color }}>{s.value}</span>
+                        <span style={{ color: 'var(--tx-4)' }}>{s.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '11px', color: 'var(--tx-4)', margin: 0, fontStyle: 'italic' }}>No activity</p>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
-                <div>
-                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--tx-1)' }}>{u.actions_24h}</span>
-                  <span style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'block' }}>today</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--tx-2)' }}>{u.actions_7d}</span>
-                  <span style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'block' }}>7 days</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--b-purple-tx)' }}>{u.emails_7d}</span>
-                  <span style={{ fontSize: '10px', color: 'var(--tx-4)', display: 'block' }}>emails</span>
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

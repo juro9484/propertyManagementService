@@ -698,21 +698,30 @@ def usage_analytics(request: Request, days: int = Query(30, ge=1, le=365)):
     with get_cursor() as cur:
         cutoff = f"{days} days"
 
-        # Per-user activity summary
+        # Per-user activity summary with status breakdowns
         cur.execute("""
             SELECT u.id, u.name, u.email, u.last_login,
                 (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
-                    AND la.created_at > NOW() - %s::interval) as actions_period,
+                    AND la.action = 'email_generated'
+                    AND la.created_at > NOW() - %s::interval) as emails_generated,
                 (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
-                    AND la.created_at > NOW() - INTERVAL '24 hours') as actions_24h,
-                (SELECT COUNT(*) FROM outreach o
-                    JOIN lead_activity la2 ON la2.lead_id = o.lead_id
-                    AND la2.user_id = u.id AND la2.action = 'email_generated'
-                    WHERE o.channel = 'ai_draft'
-                    AND o.created_at > NOW() - %s::interval) as emails_period
+                    AND la.action = 'status_change' AND la.detail LIKE '%%contacted'
+                    AND la.created_at > NOW() - %s::interval) as marked_contacted,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.action = 'status_change' AND la.detail LIKE '%%follow_up'
+                    AND la.created_at > NOW() - %s::interval) as marked_follow_up,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.action = 'status_change' AND la.detail LIKE '%%meeting'
+                    AND la.created_at > NOW() - %s::interval) as marked_meeting,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.action = 'status_change' AND la.detail LIKE '%%converted'
+                    AND la.created_at > NOW() - %s::interval) as marked_converted,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.action = 'status_change' AND la.detail LIKE '%%not_interested'
+                    AND la.created_at > NOW() - %s::interval) as marked_not_interested
             FROM users u WHERE u.active = TRUE
-            ORDER BY actions_period DESC
-        """, [cutoff, cutoff])
+            ORDER BY emails_generated DESC
+        """, [cutoff, cutoff, cutoff, cutoff, cutoff, cutoff])
         user_stats = [dict(r) for r in cur.fetchall()]
 
         # Recent activity feed
