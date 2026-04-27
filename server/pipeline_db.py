@@ -29,6 +29,15 @@ LLC_KEYWORDS = [
 RENTAL_ACCT = [
     "MULTI_FAMILY", "APARTMENT", "DUPLEX", "TRIPLEX",
     "CONDO", "TOWNHOME", "RESIDENTIAL RENTAL",
+    # Larimer account types
+    "MULTIPLE UNIT", "MH PARK", "MOBILE HOME",
+]
+
+# Owners that are clearly developers/builders/institutional — not PM prospects
+DEVELOPER_KEYWORDS = [
+    "HOMES", "HOMEBUILDERS", "HOMECO", "REAL ESTATE GROUP",
+    "BORROWER", "FORESTAR", "LENNAR", "DR HORTON", "MERITAGE",
+    "KB HOME", "TOLL BROTHERS", "PULTE", "NVR ", "DREAM FINDERS",
 ]
 
 
@@ -36,10 +45,19 @@ def has_llc_signal(name: str) -> bool:
     return any(kw in name.upper() for kw in LLC_KEYWORDS)
 
 
+def _is_developer(name: str) -> bool:
+    up = name.upper()
+    return any(kw in up for kw in DEVELOPER_KEYWORDS)
+
+
 def score_lead(owner_name, prop_city, mail_city, mail_state, prop_count, acct_type, is_new):
     score = 0
     badges = []
     breakdown = {}
+
+    # Developers/builders get score 0 — they're not PM prospects
+    if _is_developer(owner_name):
+        return 0, [], {}
 
     if has_llc_signal(owner_name):
         score += 4; badges.append("LLC"); breakdown["llc_signal"] = 4
@@ -49,10 +67,14 @@ def score_lead(owner_name, prop_city, mail_city, mail_state, prop_count, acct_ty
     elif mail_city and prop_city and mail_city.strip().upper() != prop_city.strip().upper():
         score += 3; badges.append("ABSENTEE"); breakdown["absentee"] = 3
 
+    # Property count: sweet spot is 3-50 (real landlords)
+    # 50+ is likely institutional/developer — cap the bonus
     if 3 <= prop_count <= 4:
         score += 3; badges.append("MULTI_PROP"); breakdown["multi_property"] = 3
-    elif prop_count >= 5:
+    elif 5 <= prop_count <= 50:
         score += 6; badges.append("PORTFOLIO"); breakdown["portfolio"] = 6
+    elif prop_count > 50:
+        score += 3; badges.append("PORTFOLIO"); breakdown["portfolio"] = 3  # reduced — likely institutional
 
     if any(r in acct_type.upper() for r in RENTAL_ACCT):
         score += 2; breakdown["rental_type"] = 2
