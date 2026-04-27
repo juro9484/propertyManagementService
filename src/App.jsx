@@ -6,11 +6,13 @@ import PropertyMap from './components/PropertyMap'
 import OutreachModal from './components/OutreachModal'
 import LoginPage from './components/LoginPage'
 import UserManagement from './components/UserManagement'
+import ActivityLog from './components/ActivityLog'
 import { sampleLandlordData } from './sampleData'
 
 const TABS = [
   { label: 'Leads' },
   { label: 'Property Map' },
+  { label: 'Activity', adminOnly: true },
   { label: 'Settings', adminOnly: true },
 ]
 
@@ -227,6 +229,9 @@ export default function App() {
               <PropertyMap leads={leads} theme={theme} county={county} />
             )}
             {activeTab === 2 && user?.role === 'admin' && (
+              <ActivityLog />
+            )}
+            {activeTab === 3 && user?.role === 'admin' && (
               <UserManagement />
             )}
           </>

@@ -687,6 +687,69 @@ def outreach_history(lead_id: int):
     return [dict(r) for r in rows]
 
 
+# ── Usage Analytics (admin only) ──────────────────────────────────────────────
+
+@app.get("/api/analytics/usage")
+def usage_analytics(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+
+    with get_cursor() as cur:
+        # Per-user activity summary
+        cur.execute("""
+            SELECT u.id, u.name, u.email, u.last_login,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.created_at > NOW() - INTERVAL '7 days') as actions_7d,
+                (SELECT COUNT(*) FROM lead_activity la WHERE la.user_id = u.id
+                    AND la.created_at > NOW() - INTERVAL '24 hours') as actions_24h,
+                (SELECT COUNT(*) FROM outreach o
+                    JOIN lead_activity la2 ON la2.lead_id = o.lead_id
+                    AND la2.user_id = u.id AND la2.action = 'email_generated'
+                    WHERE o.channel = 'ai_draft'
+                    AND o.created_at > NOW() - INTERVAL '7 days') as emails_7d
+            FROM users u WHERE u.active = TRUE
+            ORDER BY actions_7d DESC
+        """)
+        user_stats = [dict(r) for r in cur.fetchall()]
+
+        # Recent activity feed
+        cur.execute("""
+            SELECT la.action, la.detail, la.created_at,
+                u.name as user_name, l.owner_name as lead_name
+            FROM lead_activity la
+            LEFT JOIN users u ON u.id = la.user_id
+            LEFT JOIN leads l ON l.id = la.lead_id
+            ORDER BY la.created_at DESC
+            LIMIT 50
+        """)
+        recent = [dict(r) for r in cur.fetchall()]
+
+        # Daily stats (last 7 days)
+        cur.execute("""
+            SELECT DATE(created_at) as day,
+                COUNT(*) as total_actions,
+                COUNT(CASE WHEN action = 'status_change' THEN 1 END) as status_changes,
+                COUNT(CASE WHEN action = 'email_generated' THEN 1 END) as emails_generated
+            FROM lead_activity
+            WHERE created_at > NOW() - INTERVAL '7 days'
+            GROUP BY DATE(created_at)
+            ORDER BY day DESC
+        """)
+        daily = [dict(r) for r in cur.fetchall()]
+
+        # Total emails generated (all time)
+        cur.execute("SELECT COUNT(*) as c FROM outreach WHERE channel = 'ai_draft'")
+        total_emails = cur.fetchone()["c"]
+
+    return {
+        "user_stats": user_stats,
+        "recent_activity": recent,
+        "daily_stats": daily,
+        "total_emails_generated": total_emails,
+    }
+
+
 # ── AI Email Generation (Claude) ─────────────────────────────────────────────
 
 class GenerateEmailRequest(BaseModel):
