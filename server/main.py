@@ -64,13 +64,32 @@ def startup():
             app.mount("/data", StaticFiles(directory=DIST_DIR / "data"), name="data")
 
 
+# ── Login rate limiting (prevent brute force) ────────────────────────────────
+_login_attempts = {}  # ip → (count, first_attempt_time)
+LOGIN_MAX_ATTEMPTS = 10
+LOGIN_WINDOW_SECONDS = 300  # 5 min
+
+
 # ── Auth middleware ───────────────────────────────────────────────────────────
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    # Skip auth for: login endpoint, static files, docs
-    if (path == "/api/auth/login" or
+
+    # Rate limit login endpoint
+    if path == "/api/auth/login" and request.method == "POST":
+        ip = request.client.host
+        now = __import__("time").time()
+        attempts, first_time = _login_attempts.get(ip, (0, now))
+        if now - first_time > LOGIN_WINDOW_SECONDS:
+            attempts, first_time = 0, now
+        if attempts >= LOGIN_MAX_ATTEMPTS:
+            from starlette.responses import JSONResponse
+            return JSONResponse(status_code=429, content={"detail": "Too many login attempts. Try again in 5 minutes."})
+        _login_attempts[ip] = (attempts + 1, first_time)
+
+    # Skip auth for: login, health, static files, docs
+    if (path in ("/api/auth/login", "/api/health") or
         not path.startswith("/api/") or
         path in ("/docs", "/openapi.json", "/redoc")):
         return await call_next(request)
@@ -82,6 +101,11 @@ async def auth_middleware(request: Request, call_next):
     except HTTPException as e:
         from starlette.responses import JSONResponse
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+
+    # Log API access
+    user_email = user.get("email", "?") if user else "anon"
+    import logging
+    logging.info(f"[API] {request.method} {path} — {user_email}")
 
     return await call_next(request)
 
@@ -173,7 +197,7 @@ class SendEmailRequest(BaseModel):
 
 @app.get("/api/health")
 def health_check():
-    """Quick health check — DB connection, last pipeline run, lead/enrichment counts."""
+    """Production health check — DB, pipeline status, per-county stats, alerts config."""
     try:
         with get_cursor() as cur:
             cur.execute("SELECT 1")
@@ -181,40 +205,66 @@ def health_check():
     except Exception:
         db_ok = False
 
-    last_run = None
+    last_runs = {}
+    counties = {}
+    total_leads = 0
+    enriched = 0
     try:
         with get_cursor() as cur:
+            # Last run per county
             cur.execute("""
-                SELECT status, started_at, finished_at, leads_scored, records_processed, error_message
+                SELECT DISTINCT ON (county) county, status, started_at, finished_at,
+                    leads_scored, records_processed, error_message
                 FROM pipeline_runs
                 WHERE status IN ('completed', 'failed')
-                ORDER BY started_at DESC LIMIT 1
+                ORDER BY county, started_at DESC
             """)
-            row = cur.fetchone()
-            if row:
-                last_run = {
+            for row in cur.fetchall():
+                duration = None
+                if row["started_at"] and row["finished_at"]:
+                    duration = str(row["finished_at"] - row["started_at"]).split(".")[0]
+                last_runs[row["county"]] = {
                     "status": row["status"],
                     "started_at": row["started_at"].isoformat() if row["started_at"] else None,
-                    "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+                    "duration": duration,
                     "leads_scored": row["leads_scored"],
-                    "records_processed": row["records_processed"],
                     "error": row["error_message"],
                 }
 
-            cur.execute("SELECT COUNT(*) as c FROM leads")
-            total_leads = cur.fetchone()["c"]
-            cur.execute("SELECT COUNT(*) as c FROM leads WHERE enriched_at IS NOT NULL")
-            enriched = cur.fetchone()["c"]
+            # Per-county stats
+            cur.execute("""
+                SELECT county,
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN enriched_at IS NOT NULL THEN 1 END) as enriched,
+                    COUNT(CASE WHEN email IS NOT NULL OR phone IS NOT NULL THEN 1 END) as has_contact
+                FROM leads GROUP BY county
+            """)
+            for row in cur.fetchall():
+                counties[row["county"]] = {
+                    "total_leads": row["total"],
+                    "enriched": row["enriched"],
+                    "with_contact": row["has_contact"],
+                }
+                total_leads += row["total"]
+                enriched += row["enriched"]
+
+            # Active users
+            cur.execute("SELECT COUNT(*) as c FROM users WHERE active = TRUE")
+            user_count = cur.fetchone()["c"]
     except Exception:
-        total_leads = 0
-        enriched = 0
+        user_count = 0
+
+    alerts_configured = bool(os.getenv("ALERT_SMTP_USER") or os.getenv("ALERT_SLACK_WEBHOOK"))
 
     return {
         "healthy": db_ok,
         "database": "connected" if db_ok else "unreachable",
         "total_leads": total_leads,
         "enriched_leads": enriched,
-        "last_pipeline_run": last_run,
+        "active_users": user_count,
+        "alerts_configured": alerts_configured,
+        "counties": counties,
+        "last_pipeline_runs": last_runs,
     }
 
 
