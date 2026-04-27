@@ -334,7 +334,7 @@ export default function OutreachModal({ lead, type, allLeads, onClose }) {
             <textarea
               ref={textareaRef}
               className="field"
-              style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: 0, marginTop: '12px', marginBottom: '12px', overflowY: 'auto' }}
+              style={{ flex: 1, resize: 'none', fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, color: 'var(--tx-2)', minHeight: '350px', marginTop: '12px', marginBottom: '12px', overflowY: 'auto' }}
               value={email}
               onChange={e => setEmail(e.target.value)}
               spellCheck
