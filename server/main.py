@@ -323,8 +323,10 @@ def list_leads(
         conditions.append("l.score >= %s")
         params.append(min_score)
     if status:
-        if status == "pipeline":
-            # All active statuses (not new, not closed)
+        if status == "new":
+            # Only enriched new leads — no point showing unenriched ones
+            conditions.append("l.status = 'new' AND l.enriched_at IS NOT NULL")
+        elif status == "pipeline":
             conditions.append("l.status IN ('contacted', 'follow_up', 'meeting')")
         elif status == "closed":
             conditions.append("l.status IN ('converted', 'not_interested')")
