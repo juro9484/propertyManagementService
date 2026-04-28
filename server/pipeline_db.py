@@ -68,48 +68,51 @@ def score_lead(owner_name, prop_city, mail_city, mail_state, prop_count, acct_ty
     if _is_developer(owner_name):
         return 0, [], {}
 
-    # ── FIT (max ~56) ────────────────────────────────────────────────────
-    fit = 0
+    # ── FIT (weighted at 0.30) ───────────────────────────────────────────
+    fit_signals = {}
 
     # Location signal
     if mail_state and mail_state.upper() not in ("CO", ""):
-        fit += 18; badges.append("OUT_OF_STATE"); breakdown["out_of_state"] = 18
+        fit_signals["out_of_state"] = 18; badges.append("OUT_OF_STATE")
     elif mail_city and prop_city and mail_city.strip().upper() != prop_city.strip().upper():
-        fit += 12; badges.append("ABSENTEE"); breakdown["absentee"] = 12
+        fit_signals["absentee"] = 12; badges.append("ABSENTEE")
 
-    # Entity type (mild signal — LLC doesn't mean they have systems)
+    # Entity type
     if has_llc_signal(owner_name):
-        fit += 5; badges.append("LLC"); breakdown["llc_signal"] = 5
+        fit_signals["llc_signal"] = 5; badges.append("LLC")
 
     # Property count
     if prop_count == 1:
-        fit += 12; breakdown["properties"] = 12
+        fit_signals["properties"] = 12
     elif 2 <= prop_count <= 4:
-        fit += 15; badges.append("MULTI_PROP"); breakdown["properties"] = 15
+        fit_signals["properties"] = 15; badges.append("MULTI_PROP")
     elif 5 <= prop_count <= 8:
-        fit += 18; badges.append("PORTFOLIO"); breakdown["properties"] = 18
+        fit_signals["properties"] = 18; badges.append("PORTFOLIO")
     elif 9 <= prop_count <= 20:
-        fit += 15; badges.append("PORTFOLIO"); breakdown["properties"] = 15
+        fit_signals["properties"] = 15; badges.append("PORTFOLIO")
     elif 21 <= prop_count <= 50:
-        fit += 8; badges.append("PORTFOLIO"); breakdown["properties"] = 8
-    # 50+ = 0 points
+        fit_signals["properties"] = 8; badges.append("PORTFOLIO")
 
     # Rental account type
     if any(r in acct_type.upper() for r in RENTAL_ACCT):
-        fit += 8; breakdown["rental_type"] = 8
+        fit_signals["rental_type"] = 8
 
-    # ── TIMING (max 25) ──────────────────────────────────────────────────
-    timing = 0
+    # ── TIMING (weighted at 0.15) ────────────────────────────────────────
+    timing_signals = {}
     if is_new:
-        timing += 25; badges.append("NEW_OWNER"); breakdown["new_owner"] = 25
+        timing_signals["new_owner"] = 25; badges.append("NEW_OWNER")
 
-    # ── WEIGHTED SCORE ───────────────────────────────────────────────────
-    # Struggle score (vacancy) added separately by rentcast.match_listings_to_leads()
-    # That function adds to score directly: +12, +25, or +15 (already weighted at 0.55)
-    score = round((fit * 0.30) + (timing * 0.15))
+    # ── WEIGHTED SCORE — breakdown adds up to total ────────────────────────
+    for k, raw in fit_signals.items():
+        weighted = round(raw * 0.30)
+        if weighted > 0:
+            breakdown[k] = weighted
+    for k, raw in timing_signals.items():
+        weighted = round(raw * 0.15)
+        if weighted > 0:
+            breakdown[k] = weighted
 
-    breakdown["_fit"] = fit
-    breakdown["_timing"] = timing
+    score = sum(breakdown.values())
 
     return score, badges, breakdown
 

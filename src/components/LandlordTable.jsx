@@ -272,10 +272,12 @@ function DetailPanel({ lead, onOutreach }) {
             Score Breakdown
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {Object.entries(lead.score_breakdown ?? {}).map(([k, v]) => (
+            {Object.entries(lead.score_breakdown ?? {})
+              .filter(([k, v]) => !k.startsWith('_') && v > 0)
+              .map(([k, v]) => (
               <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', color: 'var(--tx-3)', textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}</span>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sc-lo)' }}>+{v}</span>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: k.includes('vacancy') ? 'var(--b-red-tx)' : 'var(--sc-lo)' }}>+{v}</span>
               </div>
             ))}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '5px', borderTop: '1px solid var(--bd)', marginTop: '2px' }}>
