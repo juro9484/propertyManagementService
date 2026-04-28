@@ -381,20 +381,43 @@ def _run_pipeline_inner(county: str, run_id: int):
             """, batch)
         print(f"[PIPELINE] Lead properties: {len(prop_rows)} upserted")
 
-    # Mark leads created in last 60 days as NEW_OWNER (persists the flag for 2 months)
+    # Expire NEW_OWNER badges older than 60 days
     with get_cursor(commit=True) as cur:
         cur.execute("""
             UPDATE leads SET
-                badges = array_append(badges, 'NEW_OWNER'),
-                score = score + round(25 * 0.15),
-                score_breakdown = score_breakdown || '{"new_owner": 25}'::jsonb
+                badges = array_remove(badges, 'NEW_OWNER'),
+                score = score - round(25 * 0.15),
+                score_breakdown = score_breakdown - 'new_owner'
             WHERE county = %s
-            AND created_at > NOW() - INTERVAL '60 days'
-            AND NOT ('NEW_OWNER' = ANY(badges))
+            AND 'NEW_OWNER' = ANY(badges)
+            AND updated_at < NOW() - INTERVAL '60 days'
         """, [county])
-        new_owner_count = cur.rowcount
-        if new_owner_count > 0:
-            print(f"[PIPELINE] Flagged {new_owner_count} leads as NEW_OWNER (created <60 days)")
+        if cur.rowcount > 0:
+            print(f"[PIPELINE] Expired NEW_OWNER from {cur.rowcount} leads (>60 days)")
+
+    # Mark leads as NEW_OWNER if ownership change was detected this run
+    # The new_owner_folios set contains folios where the owner changed since last run
+    # Only apply if we actually detected changes (not first run)
+    if new_owner_folios:
+        new_owner_bonus = round(25 * 0.15)  # 4 points
+        with get_cursor(commit=True) as cur:
+            # Find leads that own any of the changed folios
+            cur.execute("""
+                UPDATE leads SET
+                    badges = array_append(badges, 'NEW_OWNER'),
+                    score = score + %s,
+                    score_breakdown = score_breakdown || %s::jsonb
+                WHERE county = %s
+                AND id IN (
+                    SELECT DISTINCT lead_id FROM lead_properties
+                    WHERE folio = ANY(%s) AND county = %s
+                )
+                AND NOT ('NEW_OWNER' = ANY(badges))
+            """, [new_owner_bonus, f'{{"new_owner": {new_owner_bonus}}}',
+                  county, list(new_owner_folios), county])
+            new_owner_count = cur.rowcount
+            if new_owner_count > 0:
+                print(f"[PIPELINE] Flagged {new_owner_count} leads as NEW_OWNER")
 
     # Build scored_leads list for geocoding/enrichment steps
     scored_leads = [(owner, score, lead_id_map.get(owner), recs)
