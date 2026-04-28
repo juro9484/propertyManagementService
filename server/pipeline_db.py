@@ -254,8 +254,11 @@ def _run_pipeline_inner(county: str, run_id: int):
     print(f"[PIPELINE] Loaded {len(all_records)} records, {len(records)} residential from {csv_path}")
 
     # Detect new owners by comparing against current DB state
-    new_owner_folios = _detect_new_owners_from_db(records, county)
-    print(f"[PIPELINE] {len(new_owner_folios)} new-owner events")
+    # New owner detection disabled until we have a clean baseline
+    # (DB was populated all at once — everything looks "new")
+    # Will re-enable after 1+ week of stable daily runs
+    new_owner_folios = set()
+    print(f"[PIPELINE] New owner detection: disabled (building baseline)")
 
     # Upsert raw properties into DB
     _upsert_properties(records, county)
