@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS leads (
   mailing_zip      TEXT,
   property_count   INTEGER DEFAULT 1,
 
+  -- new owner tracking
+  new_owner_since DATE,         -- when ownership change was detected, NULL if not new
+
   -- workflow
   status        TEXT NOT NULL DEFAULT 'new'
                 CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested')),

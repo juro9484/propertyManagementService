@@ -50,6 +50,7 @@ def init_db():
                 ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check;
                 ALTER TABLE leads ADD CONSTRAINT leads_status_check
                     CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested'));
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS new_owner_since DATE;
             """)
         conn.commit()
         print("[DB] Schema initialized")
