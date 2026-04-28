@@ -102,7 +102,7 @@ function Badge({ type }) {
 }
 
 // ── Left panel: compact lead card ────────────────────────────────────────────
-function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusOverride }) {
+function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusOverride, displayRank }) {
   const status    = statusOverride ?? lead.status ?? 'new'
   const sc        = STATUS_CFG[status] ?? STATUS_CFG.new
   const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
@@ -144,7 +144,7 @@ function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusO
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flexShrink: 0 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
-            <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{lead.rank}</div>
+            <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{displayRank}</div>
           </div>
           <button
             onClick={e => { e.stopPropagation(); onDismiss(lead.id) }}
@@ -392,7 +392,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
     if (minScore > 0) rows = rows.filter(l => l.score >= Number(minScore))
     if (statusFilter) rows = rows.filter(l => (statusOverrides[l.id] ?? l.status ?? 'new') === statusFilter)
     if (dismissedId) rows = rows.filter(l => l.id !== dismissedId)
-    rows.sort((a, b) => sortDir === 'desc' ? b.score - a.score : a.score - b.score)
+    rows.sort((a, b) => sortDir === 'desc' ? Number(b.score) - Number(a.score) : Number(a.score) - Number(b.score))
     return rows
   }, [leads, search, cityFilter, minScore, sortDir, statusFilter, statusOverrides, dismissedId])
 
@@ -474,7 +474,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
             <div style={{ padding: '48px 16px', textAlign: 'center', fontSize: '12px', color: 'var(--tx-4)' }}>
               No records match filters.
             </div>
-          ) : paginated.map(lead => (
+          ) : paginated.map((lead, idx) => (
             <LeadCard
               key={lead.folio}
               lead={lead}
@@ -483,6 +483,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
               onStatusChange={handleStatusChange}
               onDismiss={handleDismiss}
               statusOverride={statusOverrides[lead.id]}
+              displayRank={(page - 1) * PAGE_SIZE + idx + 1}
             />
           ))}
         </div>
