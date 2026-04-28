@@ -254,11 +254,8 @@ def _run_pipeline_inner(county: str, run_id: int):
     print(f"[PIPELINE] Loaded {len(all_records)} records, {len(records)} residential from {csv_path}")
 
     # Detect new owners by comparing against current DB state
-    # New owner detection disabled until we have a clean baseline
-    # (DB was populated all at once — everything looks "new")
-    # Will re-enable after 1+ week of stable daily runs
-    new_owner_folios = set()
-    print(f"[PIPELINE] New owner detection: disabled (building baseline)")
+    new_owner_folios = _detect_new_owners_from_db(records, county)
+    print(f"[PIPELINE] {len(new_owner_folios)} new-owner events")
 
     # Upsert raw properties into DB
     _upsert_properties(records, county)
@@ -491,6 +488,14 @@ def _run_pipeline_inner(county: str, run_id: int):
     else:
         print("[PIPELINE] TRACERFY_API_KEY not set — skipping enrichment")
 
+    # ── Step 4: Match vacancy data from rental_listings (no API call) ───────
+    vacancy_matched = 0
+    try:
+        from rentcast import match_listings_to_leads
+        vacancy_matched = match_listings_to_leads(county)
+    except Exception as e:
+        print(f"[PIPELINE] Vacancy matching failed: {e}")
+
     return {
         "run_id": run_id,
         "county": county,
@@ -499,6 +504,7 @@ def _run_pipeline_inner(county: str, run_id: int):
         "new_owners_found": len(new_owner_folios),
         "addresses_geocoded": len(coord_map),
         "leads_enriched": leads_enriched,
+        "vacancy_matched": vacancy_matched,
     }
 
 
