@@ -104,6 +104,30 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
   error_message TEXT
 );
 
+-- ─── Rental listings (RentCast — vacancy/days on market signals) ─────────────
+CREATE TABLE IF NOT EXISTS rental_listings (
+  id            TEXT PRIMARY KEY,         -- RentCast listing ID
+  address       TEXT NOT NULL,
+  city          TEXT,
+  state         TEXT,
+  zip_code      TEXT,
+  county        TEXT,
+  price         INTEGER,
+  bedrooms      INTEGER,
+  bathrooms     NUMERIC(3,1),
+  sqft          INTEGER,
+  property_type TEXT,
+  days_on_market INTEGER,
+  listed_date   DATE,
+  status        TEXT,
+  last_seen     TIMESTAMPTZ,
+  fetched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_listings_address ON rental_listings (address);
+CREATE INDEX IF NOT EXISTS idx_listings_zip ON rental_listings (zip_code);
+CREATE INDEX IF NOT EXISTS idx_listings_dom ON rental_listings (days_on_market);
+
 -- ─── Users (app login) ──────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,

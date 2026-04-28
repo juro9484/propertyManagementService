@@ -82,6 +82,7 @@ const BADGE_CFG = {
   OUT_OF_STATE: { label: 'Out of State', bg: 'var(--b-red-bg)',    tx: 'var(--b-red-tx)',    bd: 'var(--b-red-bd)'    },
   PORTFOLIO:    { label: 'Portfolio',    bg: 'var(--b-purple-bg)', tx: 'var(--b-purple-tx)', bd: 'var(--b-purple-bd)' },
   MULTI_PROP:   { label: 'Multi-prop',   bg: 'var(--b-sky-bg)',    tx: 'var(--b-sky-tx)',    bd: 'var(--b-sky-bd)'    },
+  VACANT:       { label: 'Vacant Unit', bg: 'var(--b-red-bg)',    tx: 'var(--b-red-tx)',    bd: 'var(--b-red-bd)'    },
 }
 
 function Badge({ type }) {

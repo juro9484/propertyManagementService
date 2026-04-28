@@ -195,6 +195,21 @@ class SendEmailRequest(BaseModel):
 
 # ── Health check (public — no auth required) ─────────────────────────────────
 
+# ── RentCast (vacancy signals) ────────────────────────────────────────────────
+
+@app.post("/api/rentcast/run")
+def trigger_rentcast(county: Optional[str] = None, request: Request = None):
+    """Run RentCast listing fetch + matching. Weekly cron or manual trigger."""
+    user = getattr(request.state, "user", None) if request else None
+    if user and user.get("role") != "admin":
+        raise HTTPException(403, "Admin only")
+
+    from rentcast import run_rentcast, run_all_counties
+    if county:
+        return run_rentcast(county)
+    return run_all_counties()
+
+
 @app.get("/api/health")
 def health_check():
     """Production health check — DB, pipeline status, per-county stats, alerts config."""
