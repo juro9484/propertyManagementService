@@ -377,8 +377,14 @@ def list_leads(
                    COALESCE(
                      (SELECT json_agg(json_build_object(
                         'folio', lp.folio, 'address', lp.address, 'city', lp.city,
-                        'lat', lp.lat, 'lng', lp.lng
-                      )) FROM lead_properties lp WHERE lp.lead_id = l.id),
+                        'lat', lp.lat, 'lng', lp.lng,
+                        'days_on_market', rl.days_on_market,
+                        'listing_price', rl.price
+                      )) FROM lead_properties lp
+                      LEFT JOIN rental_listings rl ON UPPER(rl.address) = UPPER(lp.address)
+                        AND rl.days_on_market BETWEEN 1 AND 180
+                        AND rl.fetched_at > NOW() - INTERVAL '10 days'
+                      WHERE lp.lead_id = l.id),
                      '[]'::json
                    ) AS all_properties
             FROM leads l

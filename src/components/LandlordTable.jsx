@@ -242,10 +242,22 @@ function DetailPanel({ lead, onOutreach }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
             {(lead.all_properties ?? [lead]).slice(0, 8).map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                <Home size={9} style={{ color: 'var(--tx-4)', flexShrink: 0, marginTop: '2px' }} />
-                <span style={{ fontSize: '11px', color: 'var(--tx-2)', lineHeight: 1.35 }}>
-                  {p.address ?? p.property_address}{p.city ? `, ${p.city}` : ''}
-                </span>
+                <Home size={9} style={{ color: p.days_on_market ? 'var(--b-red-tx)' : 'var(--tx-4)', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ lineHeight: 1.35 }}>
+                  <span style={{ fontSize: '11px', color: 'var(--tx-2)' }}>
+                    {p.address ?? p.property_address}{p.city ? `, ${p.city}` : ''}
+                  </span>
+                  {p.days_on_market && (
+                    <span style={{
+                      marginLeft: '6px', fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '3px',
+                      backgroundColor: p.days_on_market >= 45 ? 'var(--b-red-bg)' : 'var(--b-amber-bg)',
+                      color: p.days_on_market >= 45 ? 'var(--b-red-tx)' : 'var(--b-amber-tx)',
+                      border: `1px solid ${p.days_on_market >= 45 ? 'var(--b-red-bd)' : 'var(--b-amber-bd)'}`,
+                    }}>
+                      Vacant {p.days_on_market}d {p.listing_price ? `· $${p.listing_price.toLocaleString()}` : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
             {(lead.all_properties?.length ?? 0) > 8 && (

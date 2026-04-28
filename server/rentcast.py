@@ -153,35 +153,71 @@ def match_listings_to_leads(county="boulder"):
 
     print(f"[RENTCAST] {len(listing_map)} unique addresses to match")
 
-    # Match against lead_properties
+    # Match against lead_properties — track ALL vacant props per lead
     matched = 0
     with get_cursor(commit=True) as cur:
         cur.execute("""
-            SELECT lp.lead_id, lp.address, l.score
+            SELECT lp.lead_id, lp.address, l.property_count,
+                   l.created_at > NOW() - INTERVAL '60 days' as is_new_owner
             FROM lead_properties lp
             JOIN leads l ON l.id = lp.lead_id
             WHERE l.county = %s
         """, [county])
         props = cur.fetchall()
 
-        lead_vacancy = {}  # lead_id → max DOM across their properties
+        # Build per-lead vacancy data: {lead_id: {doms: [list], total_props: N, is_new: bool}}
+        lead_data = {}
         for p in props:
+            lid = p["lead_id"]
+            if lid not in lead_data:
+                lead_data[lid] = {
+                    "doms": [],
+                    "total_props": p["property_count"] or 1,
+                    "is_new": p["is_new_owner"],
+                }
             norm = _normalize_address(p["address"])
             dom = listing_map.get(norm, 0)
-            if dom > 0:
-                existing = lead_vacancy.get(p["lead_id"], 0)
-                lead_vacancy[p["lead_id"]] = max(existing, dom)
+            if 15 <= dom <= 180:
+                lead_data[lid]["doms"].append(dom)
 
-        # Calculate vacancy bonus and update lead scores
-        for lead_id, dom in lead_vacancy.items():
-            if 15 <= dom < 45:
-                bonus = 2
-            elif 45 <= dom < 90:
-                bonus = 5
-            elif 90 <= dom <= 180:
-                bonus = 3
-            else:
+        # Calculate vacancy bonus with multi-vacancy and ratio check
+        for lead_id, data in lead_data.items():
+            doms = sorted(data["doms"], reverse=True)
+            if not doms:
                 continue
+
+            total_props = data["total_props"]
+            is_new = data["is_new"]
+            vacant_count = len(doms)
+            vacancy_ratio = vacant_count / max(total_props, 1)
+
+            # Base bonus from worst (longest) vacancy
+            best_dom = doms[0]
+            if 15 <= best_dom < 45:
+                base = round(12 * 0.55)    # 7
+            elif 45 <= best_dom < 90:
+                base = round(25 * 0.55)    # 14
+            else:
+                base = round(15 * 0.55)    # 8
+
+            # Multi-vacancy bonus: +4, +4, +2 (capped at +10)
+            multi_bonus = 0
+            if vacancy_ratio > 0.5 and not is_new:
+                # Suspicious — likely stale data. No multi-bonus.
+                multi_bonus = 0
+            else:
+                extra = vacant_count - 1
+                if extra >= 1: multi_bonus += 4
+                if extra >= 2: multi_bonus += 4
+                if extra >= 3: multi_bonus += 2
+                # Cap at 10
+                multi_bonus = min(multi_bonus, 10)
+
+            total_bonus = base + multi_bonus
+
+            detail = f"vacancy_{best_dom}d"
+            if vacant_count > 1:
+                detail += f"_x{vacant_count}"
 
             cur.execute("""
                 UPDATE leads SET
@@ -191,7 +227,7 @@ def match_listings_to_leads(county="boulder"):
                     updated_at = NOW()
                 WHERE id = %s
                 AND NOT ('VACANT' = ANY(badges))
-            """, [bonus, f'{{"vacancy_{dom}d": {bonus}}}', lead_id])
+            """, [total_bonus, f'{{"{detail}": {total_bonus}}}', lead_id])
 
             if cur.rowcount > 0:
                 matched += 1

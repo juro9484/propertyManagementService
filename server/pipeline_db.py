@@ -51,36 +51,65 @@ def _is_developer(name: str) -> bool:
 
 
 def score_lead(owner_name, prop_city, mail_city, mail_state, prop_count, acct_type, is_new):
-    score = 0
+    """
+    Weighted scoring system:
+      FINAL = (Fit × 0.30) + (Struggle × 0.55) + (Timing × 0.15)
+
+    Fit (max ~63): do they match the PM client profile?
+    Struggle (max ~35): added by RentCast vacancy matching (not in this function)
+    Timing (max ~25): new owner within last 60 days
+
+    Final score range: 0-40ish
+    """
     badges = []
     breakdown = {}
 
-    # Developers/builders get score 0 — they're not PM prospects
+    # Developers/builders = 0
     if _is_developer(owner_name):
         return 0, [], {}
 
-    if has_llc_signal(owner_name):
-        score += 4; badges.append("LLC"); breakdown["llc_signal"] = 4
+    # ── FIT (max ~56) ────────────────────────────────────────────────────
+    fit = 0
 
+    # Location signal
     if mail_state and mail_state.upper() not in ("CO", ""):
-        score += 5; badges.append("OUT_OF_STATE"); breakdown["out_of_state"] = 5
+        fit += 18; badges.append("OUT_OF_STATE"); breakdown["out_of_state"] = 18
     elif mail_city and prop_city and mail_city.strip().upper() != prop_city.strip().upper():
-        score += 3; badges.append("ABSENTEE"); breakdown["absentee"] = 3
+        fit += 12; badges.append("ABSENTEE"); breakdown["absentee"] = 12
 
-    # Property count: sweet spot is 3-50 (real landlords)
-    # 50+ is likely institutional/developer — cap the bonus
-    if 3 <= prop_count <= 4:
-        score += 3; badges.append("MULTI_PROP"); breakdown["multi_property"] = 3
-    elif 5 <= prop_count <= 50:
-        score += 6; badges.append("PORTFOLIO"); breakdown["portfolio"] = 6
-    elif prop_count > 50:
-        score += 3; badges.append("PORTFOLIO"); breakdown["portfolio"] = 3  # reduced — likely institutional
+    # Entity type (mild signal — LLC doesn't mean they have systems)
+    if has_llc_signal(owner_name):
+        fit += 5; badges.append("LLC"); breakdown["llc_signal"] = 5
 
+    # Property count
+    if prop_count == 1:
+        fit += 12; breakdown["properties"] = 12
+    elif 2 <= prop_count <= 4:
+        fit += 15; badges.append("MULTI_PROP"); breakdown["properties"] = 15
+    elif 5 <= prop_count <= 8:
+        fit += 18; badges.append("PORTFOLIO"); breakdown["properties"] = 18
+    elif 9 <= prop_count <= 20:
+        fit += 15; badges.append("PORTFOLIO"); breakdown["properties"] = 15
+    elif 21 <= prop_count <= 50:
+        fit += 8; badges.append("PORTFOLIO"); breakdown["properties"] = 8
+    # 50+ = 0 points
+
+    # Rental account type
     if any(r in acct_type.upper() for r in RENTAL_ACCT):
-        score += 2; breakdown["rental_type"] = 2
+        fit += 8; breakdown["rental_type"] = 8
 
+    # ── TIMING (max 25) ──────────────────────────────────────────────────
+    timing = 0
     if is_new:
-        score += 5; badges.append("NEW_OWNER"); breakdown["new_owner"] = 5
+        timing += 25; badges.append("NEW_OWNER"); breakdown["new_owner"] = 25
+
+    # ── WEIGHTED SCORE ───────────────────────────────────────────────────
+    # Struggle score (vacancy) added separately by rentcast.match_listings_to_leads()
+    # That function adds to score directly: +12, +25, or +15 (already weighted at 0.55)
+    score = round((fit * 0.30) + (timing * 0.15))
+
+    breakdown["_fit"] = fit
+    breakdown["_timing"] = timing
 
     return score, badges, breakdown
 
@@ -245,7 +274,8 @@ def _run_pipeline_inner(county: str, run_id: int):
         primary = recs[0]
         prop_count = len(recs)
         folio = primary.get("folio", "")
-        is_new = folio in new_owner_folios
+        # New owner is handled post-upsert (60-day window based on created_at)
+        is_new = False
         prop_city = primary.get("city", "").strip()
         mail_city = primary.get("mailingCity", "").strip()
         mail_state = primary.get("mailingState", "").strip()
@@ -339,6 +369,21 @@ def _run_pipeline_inner(county: str, run_id: int):
                 ON CONFLICT DO NOTHING
             """, batch)
         print(f"[PIPELINE] Lead properties: {len(prop_rows)} upserted")
+
+    # Mark leads created in last 60 days as NEW_OWNER (persists the flag for 2 months)
+    with get_cursor(commit=True) as cur:
+        cur.execute("""
+            UPDATE leads SET
+                badges = array_append(badges, 'NEW_OWNER'),
+                score = score + round(25 * 0.15),
+                score_breakdown = score_breakdown || '{"new_owner": 25}'::jsonb
+            WHERE county = %s
+            AND created_at > NOW() - INTERVAL '60 days'
+            AND NOT ('NEW_OWNER' = ANY(badges))
+        """, [county])
+        new_owner_count = cur.rowcount
+        if new_owner_count > 0:
+            print(f"[PIPELINE] Flagged {new_owner_count} leads as NEW_OWNER (created <60 days)")
 
     # Build scored_leads list for geocoding/enrichment steps
     scored_leads = [(owner, score, lead_id_map.get(owner), recs)
