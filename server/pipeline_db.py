@@ -326,9 +326,17 @@ def _run_pipeline_inner(county: str, run_id: int):
                     mailing_state, mailing_zip, property_count)
                 VALUES %s
                 ON CONFLICT (owner_name, county) DO UPDATE SET
-                    score = EXCLUDED.score,
-                    badges = EXCLUDED.badges,
-                    score_breakdown = EXCLUDED.score_breakdown::jsonb,
+                    score = EXCLUDED.score + COALESCE(
+                        (SELECT (v.value)::int FROM jsonb_each_text(leads.score_breakdown) v
+                         WHERE v.key LIKE 'vacancy_%%' LIMIT 1), 0),
+                    badges = CASE
+                        WHEN 'VACANT' = ANY(leads.badges)
+                        THEN array_append(EXCLUDED.badges, 'VACANT')
+                        ELSE EXCLUDED.badges
+                    END,
+                    score_breakdown = EXCLUDED.score_breakdown::jsonb || COALESCE(
+                        (SELECT jsonb_object_agg(k, v) FROM jsonb_each(leads.score_breakdown) x(k, v)
+                         WHERE k LIKE 'vacancy_%%'), '{}'::jsonb),
                     property_address = EXCLUDED.property_address,
                     city = EXCLUDED.city,
                     mailing_address = EXCLUDED.mailing_address,
