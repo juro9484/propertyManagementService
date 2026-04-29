@@ -95,7 +95,7 @@ def store_listings(listings):
                     fetched_at = NOW()
             """, [
                 l.get("id"),
-                l.get("addressLine1", ""),
+                (l.get("addressLine1", "") + (" " + l.get("addressLine2", "") if l.get("addressLine2") else "")).strip(),
                 l.get("city", ""),
                 l.get("state", ""),
                 l.get("zipCode", ""),
@@ -114,22 +114,40 @@ def store_listings(listings):
     print(f"[RENTCAST] Stored {len(listings)} listings")
 
 
-def _normalize_address(addr):
-    """Normalize address for matching: uppercase, strip unit, standardize."""
+def _base_address(addr):
+    """Strip unit number: '830 20TH ST #106' → '830 20TH ST'"""
     if not addr:
         return ""
     addr = addr.upper().strip()
-    addr = re.sub(r'\s+(#|APT|UNIT|STE|SUITE)\s*\S*', '', addr)
-    addr = re.sub(r'\s+', ' ', addr)
-    return addr
+    addr = re.sub(r'\s*(#|APT|UNIT|STE|SUITE)\s*\S*$', '', addr)
+    return re.sub(r'\s+', ' ', addr).strip()
+
+
+def _has_unit(addr):
+    """Check if address contains a unit/apt number."""
+    if not addr:
+        return False
+    return bool(re.search(r'(#|APT|UNIT|STE|SUITE)\s*\S', addr.upper()))
+
+
+def _full_address(addr):
+    """Normalize full address for matching (keep unit)."""
+    if not addr:
+        return ""
+    return re.sub(r'\s+', ' ', addr.upper().strip())
 
 
 def match_listings_to_leads(county="boulder"):
     """Match rental listings to leads and update vacancy scores.
+
+    Matching rules:
+      - House (no unit in listing or lead): match by base address
+      - Apartment with unit in listing: match by full address including unit
+      - Apartment without unit in listing but lead has unit: NO match (can't tell which unit)
+
     Returns number of leads matched.
     """
     with get_cursor() as cur:
-        # Get all valid listings for this county
         cur.execute("""
             SELECT address, city, days_on_market, price
             FROM rental_listings
@@ -142,18 +160,30 @@ def match_listings_to_leads(county="boulder"):
         print(f"[RENTCAST] No listings to match for {county}")
         return 0
 
-    # Build lookup: normalized address → best (highest) DOM
-    listing_map = {}
+    # Build two lookups:
+    # 1. Full address (with unit) → DOM  (for apartment matches)
+    # 2. Base address (no unit) → DOM    (for house matches — only when listing has no unit)
+    full_map = {}    # "830 20TH ST APT 106" → DOM
+    house_map = {}   # "830 MAIN ST" → DOM  (only listings WITHOUT units)
+
     for l in listings:
-        norm = _normalize_address(l["address"])
-        if not norm:
+        addr = (l["address"] or "").strip()
+        dom = l["days_on_market"] or 0
+        if not addr or dom < 1:
             continue
-        existing = listing_map.get(norm, 0)
-        listing_map[norm] = max(existing, l["days_on_market"] or 0)
 
-    print(f"[RENTCAST] {len(listing_map)} unique addresses to match")
+        full = _full_address(addr)
+        base = _base_address(addr)
 
-    # Match against lead_properties — track ALL vacant props per lead
+        full_map[full] = max(full_map.get(full, 0), dom)
+
+        # Only add to house_map if listing has no unit
+        if not _has_unit(addr):
+            house_map[base] = max(house_map.get(base, 0), dom)
+
+    print(f"[RENTCAST] {len(full_map)} full addresses, {len(house_map)} house addresses to match")
+
+    # Match against lead_properties
     matched = 0
     with get_cursor(commit=True) as cur:
         cur.execute("""
@@ -165,7 +195,6 @@ def match_listings_to_leads(county="boulder"):
         """, [county])
         props = cur.fetchall()
 
-        # Build per-lead vacancy data: {lead_id: {doms: [list], total_props: N, is_new: bool}}
         lead_data = {}
         for p in props:
             lid = p["lead_id"]
@@ -175,8 +204,22 @@ def match_listings_to_leads(county="boulder"):
                     "total_props": p["property_count"] or 1,
                     "is_new": p["is_new_owner"],
                 }
-            norm = _normalize_address(p["address"])
-            dom = listing_map.get(norm, 0)
+
+            prop_addr = (p["address"] or "").strip()
+            prop_full = _full_address(prop_addr)
+            prop_base = _base_address(prop_addr)
+            prop_has_unit = _has_unit(prop_addr)
+
+            # Try full address match first (works for both houses and apartments with units)
+            dom = full_map.get(prop_full, 0)
+
+            # If no full match and property has NO unit, try house map
+            if dom == 0 and not prop_has_unit:
+                dom = house_map.get(prop_base, 0)
+
+            # If property HAS a unit but no full match — don't fall back to building level
+            # (can't tell which unit the listing is for)
+
             if 15 <= dom <= 180:
                 lead_data[lid]["doms"].append(dom)
 

@@ -231,22 +231,6 @@ function DetailPanel({ lead, onOutreach }) {
         </button>
       </div>
 
-      {/* Building-level vacancies (when we can't match specific unit) */}
-      {lead.building_vacancies?.length > 0 && !lead.all_properties?.some(p => p.days_on_market) && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-          {lead.building_vacancies.map((v, i) => (
-            <span key={i} style={{
-              fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: '4px',
-              backgroundColor: v.days_on_market >= 45 ? 'var(--b-red-bg)' : 'var(--b-amber-bg)',
-              color: v.days_on_market >= 45 ? 'var(--b-red-tx)' : 'var(--b-amber-tx)',
-              border: `1px solid ${v.days_on_market >= 45 ? 'var(--b-red-bd)' : 'var(--b-amber-bd)'}`,
-            }}>
-              {v.address} — Vacant {v.days_on_market}d {v.price ? `· $${v.price.toLocaleString()}` : ''}
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* 3-column grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flex: 1 }}>
 

@@ -386,21 +386,7 @@ def list_leads(
                         AND rl.fetched_at > NOW() - INTERVAL '10 days'
                       WHERE lp.lead_id = l.id),
                      '[]'::json
-                   ) AS all_properties,
-                   (SELECT json_agg(json_build_object(
-                      'address', rl2.address,
-                      'days_on_market', rl2.days_on_market,
-                      'price', rl2.price
-                    )) FROM rental_listings rl2
-                    WHERE rl2.days_on_market BETWEEN 1 AND 180
-                    AND rl2.fetched_at > NOW() - INTERVAL '10 days'
-                    AND EXISTS (
-                      SELECT 1 FROM lead_properties lp2
-                      WHERE lp2.lead_id = l.id
-                      AND UPPER(REGEXP_REPLACE(lp2.address, '\s*(#|APT|UNIT|STE|SUITE)\s*\S*$', ''))
-                        = UPPER(REGEXP_REPLACE(rl2.address, '\s*(#|Apt|Unit|Ste|Suite)\s*\S*$', ''))
-                    )
-                   ) AS building_vacancies
+                   ) AS all_properties
             FROM leads l
             {where}
             ORDER BY {order}
