@@ -235,12 +235,12 @@ function DetailPanel({ lead, onOutreach }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', flex: 1 }}>
 
         {/* Properties */}
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.09em', margin: '0 0 8px' }}>
+        <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <p style={{ fontSize: '10px', fontWeight: 700, color: 'var(--tx-3)', textTransform: 'uppercase', letterSpacing: '0.09em', margin: '0 0 8px', flexShrink: 0 }}>
             Properties ({lead.property_count})
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            {(lead.all_properties ?? [lead]).slice(0, 8).map((p, i) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', overflowY: 'auto', maxHeight: '180px' }}>
+            {(lead.all_properties ?? [lead]).map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                 <Home size={9} style={{ color: p.days_on_market ? 'var(--b-red-tx)' : 'var(--tx-4)', flexShrink: 0, marginTop: '2px' }} />
                 <div style={{ lineHeight: 1.35 }}>
@@ -260,9 +260,6 @@ function DetailPanel({ lead, onOutreach }) {
                 </div>
               </div>
             ))}
-            {(lead.all_properties?.length ?? 0) > 8 && (
-              <span style={{ fontSize: '10px', color: 'var(--tx-4)' }}>+{lead.all_properties.length - 8} more</span>
-            )}
           </div>
         </div>
 

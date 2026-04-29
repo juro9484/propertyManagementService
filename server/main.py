@@ -381,7 +381,9 @@ def list_leads(
                         'days_on_market', rl.days_on_market,
                         'listing_price', rl.price
                       )) FROM lead_properties lp
-                      LEFT JOIN rental_listings rl ON UPPER(rl.address) = UPPER(lp.address)
+                      LEFT JOIN rental_listings rl ON
+                        UPPER(REGEXP_REPLACE(rl.address, '(Apt|Unit|Suite|Ste|#)\s*', '# ', 'gi'))
+                        = UPPER(REGEXP_REPLACE(lp.address, '(APT|UNIT|SUITE|STE|#)\s*', '# ', 'gi'))
                         AND rl.days_on_market BETWEEN 1 AND 180
                         AND rl.fetched_at > NOW() - INTERVAL '10 days'
                       WHERE lp.lead_id = l.id),
