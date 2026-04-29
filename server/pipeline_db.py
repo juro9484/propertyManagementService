@@ -323,17 +323,9 @@ def _run_pipeline_inner(county: str, run_id: int):
                     mailing_state, mailing_zip, property_count)
                 VALUES %s
                 ON CONFLICT (owner_name, county) DO UPDATE SET
-                    score = EXCLUDED.score + COALESCE(
-                        (SELECT (v.value)::int FROM jsonb_each_text(leads.score_breakdown) v
-                         WHERE v.key LIKE 'vacancy_%%' LIMIT 1), 0),
-                    badges = CASE
-                        WHEN 'VACANT' = ANY(leads.badges)
-                        THEN array_append(EXCLUDED.badges, 'VACANT')
-                        ELSE EXCLUDED.badges
-                    END,
-                    score_breakdown = EXCLUDED.score_breakdown::jsonb || COALESCE(
-                        (SELECT jsonb_object_agg(k, v) FROM jsonb_each(leads.score_breakdown) x(k, v)
-                         WHERE k LIKE 'vacancy_%%'), '{}'::jsonb),
+                    score = EXCLUDED.score,
+                    badges = EXCLUDED.badges,
+                    score_breakdown = EXCLUDED.score_breakdown::jsonb,
                     property_address = EXCLUDED.property_address,
                     city = EXCLUDED.city,
                     mailing_address = EXCLUDED.mailing_address,
@@ -492,6 +484,24 @@ def _run_pipeline_inner(county: str, run_id: int):
     vacancy_matched = 0
     try:
         from rentcast import match_listings_to_leads
+        # Clear old VACANT badges + scores so strict matching re-applies cleanly
+        with get_cursor(commit=True) as cur:
+            # Get vacancy points to subtract
+            cur.execute("""
+                UPDATE leads SET
+                    badges = array_remove(badges, 'VACANT'),
+                    score = score - COALESCE(
+                        (SELECT (v.value)::int FROM jsonb_each_text(score_breakdown) v
+                         WHERE v.key LIKE 'vacancy_%%' LIMIT 1), 0),
+                    score_breakdown = (
+                        SELECT COALESCE(jsonb_object_agg(k, v), '{}'::jsonb)
+                        FROM jsonb_each(score_breakdown) x(k, v)
+                        WHERE k NOT LIKE 'vacancy_%%'
+                    )
+                WHERE county = %s AND 'VACANT' = ANY(badges)
+            """, [county])
+            if cur.rowcount > 0:
+                print(f"[PIPELINE] Cleared VACANT from {cur.rowcount} leads for re-matching")
         vacancy_matched = match_listings_to_leads(county)
     except Exception as e:
         print(f"[PIPELINE] Vacancy matching failed: {e}")
