@@ -871,19 +871,21 @@ THEIR SITUATION:
 
 TONE: {body.tone}
 
+{"APPROACH: This lead has ACTIVE STRUGGLE signals (vacancy, pricing issues). Lead with an observation about their situation. Be empathetic, not salesy." if insight_context else "APPROACH: This lead has NO struggle signals — they might be doing fine or already have a PM. Do NOT assume they have a problem. Instead, offer something valuable: a free rental market analysis for their area, a local market insight, or a Colorado rental compliance update. The goal is to start a conversation, not diagnose a problem they might not have."}
+
 RULES:
 - Under 90 words. 2-3 short paragraphs.
 - Address them by first name ({greeting_name}), NEVER by LLC name
-- If insights exist above, weave ONE observation in naturally
-- Do NOT quote specific percentages or exact statistics — keep it conversational
-- Instead of "your property is 11.6% overpriced" say "your listing seems a bit high for the area"
-- Instead of "58 days on market" say "it looks like your place has been sitting a while"
+{"- Weave ONE observation about their situation naturally" if insight_context else "- Offer ONE specific piece of value (market data, compliance tip, rental trend)"}
+- Do NOT quote specific percentages or exact statistics
+- Do NOT assume they need help or are struggling
 - Reference a specific property address
 - End with a casual question
 - Sign off as [Your Name], All County Property Management — Boulder County
 - No subject line
 - Sound like a helpful neighbor, not a sales pitch
-- NEVER say "I noticed", "we offer", "our services", or "property management company" """
+- NEVER say "I noticed", "we offer", "our services", or "property management company"
+- NEVER say "I know managing from out of state is hard" — they might have it handled"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
