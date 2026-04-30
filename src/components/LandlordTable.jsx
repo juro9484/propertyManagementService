@@ -247,7 +247,7 @@ function DetailPanel({ lead, onOutreach }) {
                   <span style={{ fontSize: '11px', color: 'var(--tx-2)' }}>
                     {p.address ?? p.property_address}{p.city ? `, ${p.city}` : ''}
                   </span>
-                  {p.days_on_market && (
+                  {p.days_on_market >= 15 && (
                     <span style={{
                       marginLeft: '6px', fontSize: '9px', fontWeight: 600, padding: '1px 5px', borderRadius: '3px',
                       backgroundColor: p.days_on_market >= 45 ? 'var(--b-red-bg)' : 'var(--b-amber-bg)',
@@ -271,12 +271,28 @@ function DetailPanel({ lead, onOutreach }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {Object.entries(lead.score_breakdown ?? {})
               .filter(([k, v]) => !k.startsWith('_') && v > 0)
-              .map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', color: 'var(--tx-3)', textTransform: 'capitalize' }}>{k.replace(/_/g, ' ')}</span>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: k.includes('vacancy') ? 'var(--b-red-tx)' : 'var(--sc-lo)' }}>+{v}</span>
-              </div>
-            ))}
+              .map(([k, v]) => {
+                const labels = {
+                  out_of_state: 'Out of state owner',
+                  absentee: 'Absentee owner (different city)',
+                  llc_signal: 'LLC / business entity',
+                  properties: `${lead.property_count} properties owned`,
+                  rental_type: 'Rental property type',
+                  new_owner: 'New owner (recent purchase)',
+                  dom_vs_market: 'Longer than market avg DOM',
+                  price_drop: 'Price reduced from original',
+                  overpriced: 'Listed above market rent',
+                  multi_vacancy: 'Multiple vacant units',
+                }
+                const label = labels[k] || (k.startsWith('vacancy_') ? `Vacant ${k.replace('vacancy_', '').replace('_', ' ')}` : k.replace(/_/g, ' '))
+                const isStruggle = k.includes('vacancy') || k.includes('dom') || k.includes('price') || k === 'overpriced' || k === 'multi_vacancy'
+                return (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', color: isStruggle ? 'var(--b-red-tx)' : 'var(--tx-3)' }}>{label}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: isStruggle ? 'var(--b-red-tx)' : 'var(--sc-lo)' }}>+{v}</span>
+                  </div>
+                )
+              })}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '5px', borderTop: '1px solid var(--bd)', marginTop: '2px' }}>
               <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--tx-2)' }}>Total</span>
               <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--tx-1)' }}>{lead.score}</span>
