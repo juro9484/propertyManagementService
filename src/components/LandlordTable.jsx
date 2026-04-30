@@ -524,7 +524,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
             </div>
           ) : paginated.map((lead, idx) => (
             <LeadCard
-              key={lead.folio}
+              key={lead.id}
               lead={lead}
               selected={selectedFolio === lead.folio}
               onSelect={() => setSelectedFolio(lead.folio)}

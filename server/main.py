@@ -356,12 +356,12 @@ def list_leads(
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     order_map = {
-        "score_desc": "l.score DESC",
-        "score_asc": "l.score ASC",
-        "name_asc": "l.owner_name ASC",
-        "newest": "l.created_at DESC",
+        "score_desc": "l.score DESC, l.id ASC",
+        "score_asc": "l.score ASC, l.id ASC",
+        "name_asc": "l.owner_name ASC, l.id ASC",
+        "newest": "l.created_at DESC, l.id ASC",
     }
-    order = order_map.get(sort, "l.score DESC")
+    order = order_map.get(sort, "l.score DESC, l.id ASC")
 
     offset = (page - 1) * per_page
     params.extend([per_page, offset])
