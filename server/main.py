@@ -846,36 +846,44 @@ def generate_email(body: GenerateEmailRequest, request: Request):
     insight_obj = get_insights_for_lead(dict(lead))
     insight_context = build_llm_context(insight_obj) if insight_obj else ""
 
+    # Use contact person name if available, otherwise owner name
+    contact_name = lead.get('company') or lead['owner_name']
+    # If contact is a person name, use first name only for greeting
+    name_parts = contact_name.split()
+    greeting_name = name_parts[0] if name_parts and not any(kw in contact_name.upper() for kw in ['LLC', 'TRUST', 'LP', 'INC', 'CORP']) else contact_name
+
     prompt = f"""Write a property management outreach letter for All County Property Management (Boulder County, Colorado).
 
-TARGET OWNER:
-- Name: {lead['owner_name']}
+ADDRESSING:
+- Write to: {greeting_name} (their name is {contact_name})
+- They own: {lead['owner_name']}
+- Use their FIRST NAME in the greeting, not the LLC/trust name
+
+THEIR SITUATION:
 - Properties owned: {lead['property_count']}
 - Property addresses:
 {props_list}
-- Mailing state: {lead['mailing_state'] or 'CO'}
-- Badges: {', '.join(lead['badges'] or [])}
-
-{"- They are an LLC/entity" if 'LLC' in (lead['badges'] or []) else ""}
-{"- Out-of-state owner" if 'OUT_OF_STATE' in (lead['badges'] or []) else ""}
-{"- Absentee owner" if 'ABSENTEE' in (lead['badges'] or []) else ""}
-{"- Portfolio owner (5+ properties)" if 'PORTFOLIO' in (lead['badges'] or []) else ""}
-{"- New owner — just acquired" if 'NEW_OWNER' in (lead['badges'] or []) else ""}
+- Located in: {lead['mailing_state'] or 'CO'}
+{"- They manage remotely from out of state" if 'OUT_OF_STATE' in (lead['badges'] or []) else ""}
+{"- They don't live near their properties" if 'ABSENTEE' in (lead['badges'] or []) else ""}
 
 {insight_context}
 
 TONE: {body.tone}
 
-REQUIREMENTS:
+RULES:
 - Under 90 words. 2-3 short paragraphs.
-- If there are situation insights above, lead with ONE specific observation from the data
+- Address them by first name ({greeting_name}), NEVER by LLC name
+- If insights exist above, weave ONE observation in naturally
+- Do NOT quote specific percentages or exact statistics — keep it conversational
+- Instead of "your property is 11.6% overpriced" say "your listing seems a bit high for the area"
+- Instead of "58 days on market" say "it looks like your place has been sitting a while"
 - Reference a specific property address
-- Make ONE helpful suggestion based on their situation
-- End with a question (soft CTA)
+- End with a casual question
 - Sign off as [Your Name], All County Property Management — Boulder County
-- No subject line — just the letter body
-- Sound like a neighbor who happens to manage properties, not a salesperson
-- NEVER say "I noticed" or "we offer property management" — be natural"""
+- No subject line
+- Sound like a helpful neighbor, not a sales pitch
+- NEVER say "I noticed", "we offer", "our services", or "property management company" """
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",

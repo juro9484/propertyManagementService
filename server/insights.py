@@ -80,13 +80,13 @@ def generate_insights(metrics, lead_data):
     # Overpriced vs market comps
     if price_vs_market >= 15 and rent_est > 0:
         insights.append({
-            "message": f"Listed {price_vs_market}% above market — comparable rentals average ${rent_est:,}/mo vs asking ${current_price:,}",
+            "message": "Property seems priced above what similar rentals in the area are going for",
             "severity": "high",
             "category": "pricing",
         })
     elif price_vs_market >= 5 and rent_est > 0:
         insights.append({
-            "message": f"Listed {price_vs_market}% above comparable rentals in the area (${rent_est:,}/mo average)",
+            "message": "Asking rent is a bit higher than comparable properties nearby",
             "severity": "medium",
             "category": "pricing",
         })
@@ -94,7 +94,7 @@ def generate_insights(metrics, lead_data):
     # Underpriced vs market
     if price_vs_market < -15 and rent_est > 0:
         insights.append({
-            "message": f"Listed {abs(price_vs_market)}% below market — potential income opportunity at ${rent_est:,}/mo",
+            "message": "Listed below what similar properties are renting for — could be leaving money on the table",
             "severity": "medium",
             "category": "underpricing",
         })
@@ -102,13 +102,13 @@ def generate_insights(metrics, lead_data):
     # Price drop from original listing
     if price_drop >= 15:
         insights.append({
-            "message": f"Owner has cut asking rent by {price_drop}% (from ${metrics['max_history_price']:,} to ${current_price:,}), indicating difficulty leasing",
+            "message": "There have been a few price drops on the listing, which can signal difficulty filling the unit",
             "severity": "high",
             "category": "pricing",
         })
     elif price_drop >= 5:
         insights.append({
-            "message": f"Asking rent reduced {price_drop}% from original listing price",
+            "message": "Listing price has been adjusted down from the original ask",
             "severity": "medium",
             "category": "pricing",
         })
