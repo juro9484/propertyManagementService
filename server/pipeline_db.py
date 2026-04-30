@@ -510,7 +510,7 @@ def _run_pipeline_inner(county: str, run_id: int):
     emails_verified = 0
     try:
         from email_verify import verify_emails
-        emails_verified = verify_emails(limit=50)
+        emails_verified = verify_emails(limit=200)
     except Exception as e:
         print(f"[PIPELINE] Email verification failed: {e}")
 
