@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS leads (
   mailing_zip      TEXT,
   property_count   INTEGER DEFAULT 1,
 
+  -- contact verification
+  phone_dnc     BOOLEAN DEFAULT FALSE,  -- Do Not Call registry flag
+  email_status  TEXT DEFAULT 'unverified',  -- unverified, valid, invalid, risky
+
   -- new owner tracking
   new_owner_since DATE,         -- when ownership change was detected, NULL if not new
 

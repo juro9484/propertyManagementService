@@ -506,6 +506,14 @@ def _run_pipeline_inner(county: str, run_id: int):
     except Exception as e:
         print(f"[PIPELINE] Vacancy matching failed: {e}")
 
+    # ── Step 5: Verify emails for top leads that haven't been checked ─────
+    emails_verified = 0
+    try:
+        from email_verify import verify_emails
+        emails_verified = verify_emails(limit=50)
+    except Exception as e:
+        print(f"[PIPELINE] Email verification failed: {e}")
+
     return {
         "run_id": run_id,
         "county": county,

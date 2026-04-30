@@ -51,6 +51,8 @@ def init_db():
                 ALTER TABLE leads ADD CONSTRAINT leads_status_check
                     CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested'));
                 ALTER TABLE leads ADD COLUMN IF NOT EXISTS new_owner_since DATE;
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_dnc BOOLEAN DEFAULT FALSE;
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS email_status TEXT DEFAULT 'unverified';
                 ALTER TABLE rental_listings ADD COLUMN IF NOT EXISTS rent_estimate INTEGER;
                 ALTER TABLE rental_listings ADD COLUMN IF NOT EXISTS rent_range_low INTEGER;
                 ALTER TABLE rental_listings ADD COLUMN IF NOT EXISTS rent_range_high INTEGER;

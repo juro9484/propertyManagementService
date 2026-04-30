@@ -217,13 +217,26 @@ function DetailPanel({ lead, onOutreach }) {
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         {lead.email && (
-          <a href={`mailto:${lead.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--b-green-tx)', backgroundColor: 'var(--b-green-bg)', border: '1px solid var(--b-green-bd)', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none' }}>
+          <a href={`mailto:${lead.email}`} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none',
+            color: lead.email_status === 'invalid' ? 'var(--b-red-tx)' : 'var(--b-green-tx)',
+            backgroundColor: lead.email_status === 'invalid' ? 'var(--b-red-bg)' : 'var(--b-green-bg)',
+            border: `1px solid ${lead.email_status === 'invalid' ? 'var(--b-red-bd)' : 'var(--b-green-bd)'}`,
+            opacity: lead.email_status === 'invalid' ? 0.5 : 1,
+          }}>
             <Mail size={10} /> {lead.email}
+            {lead.email_status === 'valid' && <span title="Verified" style={{ fontSize: '9px' }}>✓</span>}
+            {lead.email_status === 'invalid' && <span title="Invalid" style={{ fontSize: '9px' }}>✗</span>}
+            {lead.email_status === 'risky' && <span title="Risky" style={{ fontSize: '9px', color: 'var(--b-amber-tx)' }}>⚠</span>}
           </a>
         )}
         {lead.phone && (
-          <a href={`tel:${lead.phone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--b-blue-tx)', backgroundColor: 'var(--b-blue-bg)', border: '1px solid var(--b-blue-bd)', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none' }}>
+          <a href={`tel:${lead.phone}`} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none',
+            color: 'var(--b-blue-tx)', backgroundColor: 'var(--b-blue-bg)', border: '1px solid var(--b-blue-bd)',
+          }}>
             <Phone size={10} /> {lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}
+            {lead.phone_dnc && <span title="Do Not Call" style={{ fontSize: '9px', color: 'var(--b-red-tx)' }}>DNC</span>}
           </a>
         )}
         {lead.mailing_state && lead.mailing_state !== 'CO' && (

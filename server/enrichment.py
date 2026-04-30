@@ -84,6 +84,13 @@ def enrich_lead(lead: dict, api_key: str) -> dict:
     full_name = person.get("full_name")
     litigator = person.get("litigator", False)
 
+    # Check DNC status of the selected phone
+    phone_dnc = False
+    for p in phones:
+        if p.get("number") == phone:
+            phone_dnc = p.get("dnc", False)
+            break
+
     # Store all phones and emails as JSON for the detail view
     all_phones = [{"number": p["number"], "type": p.get("type"), "dnc": p.get("dnc")} for p in phones]
     all_emails = [e["email"] for e in emails]
@@ -95,10 +102,11 @@ def enrich_lead(lead: dict, api_key: str) -> dict:
             SET email = COALESCE(%s, email),
                 phone = COALESCE(%s, phone),
                 company = COALESCE(%s, company),
+                phone_dnc = %s,
                 enriched_at = NOW(),
                 updated_at = NOW()
             WHERE id = %s
-        """, [email, phone, full_name, lead["id"]])
+        """, [email, phone, full_name, phone_dnc, lead["id"]])
 
     return {
         "enriched": True,
