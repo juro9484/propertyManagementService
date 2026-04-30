@@ -279,12 +279,25 @@ function DetailPanel({ lead, onOutreach }) {
                   properties: `${lead.property_count} properties owned`,
                   rental_type: 'Rental property type',
                   new_owner: 'New owner (recent purchase)',
-                  dom_vs_market: 'Longer than market avg DOM',
-                  price_drop: 'Price reduced from original',
-                  overpriced: 'Listed above market rent',
                   multi_vacancy: 'Multiple vacant units',
                 }
-                const label = labels[k] || (k.startsWith('vacancy_') ? `Vacant ${k.replace('vacancy_', '').replace('_', ' ')}` : k.replace(/_/g, ' '))
+                let label = labels[k]
+                if (!label) {
+                  if (k.startsWith('vacancy_')) label = `Vacant ${k.replace('vacancy_', '').replace('d', ' days').replace('_x', ' — ')}`
+                  else if (k.startsWith('dom_')) {
+                    const m = k.match(/dom_(\d+)d_vs_(\d+)d_avg/)
+                    label = m ? `${m[1]} days on market (avg ${m[2]}d)` : k.replace(/_/g, ' ')
+                  }
+                  else if (k.startsWith('price_drop_')) {
+                    const pct = k.replace('price_drop_', '').replace('pct', '')
+                    label = `Price reduced ${pct}% from original`
+                  }
+                  else if (k.startsWith('overpriced_')) {
+                    const pct = k.replace('overpriced_', '').replace('pct', '')
+                    label = `Listed ${pct}% above market rent`
+                  }
+                  else label = k.replace(/_/g, ' ')
+                }
                 const isStruggle = k.includes('vacancy') || k.includes('dom') || k.includes('price') || k === 'overpriced' || k === 'multi_vacancy'
                 return (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

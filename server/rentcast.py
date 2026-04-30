@@ -285,38 +285,41 @@ def match_listings_to_leads(county="boulder"):
                 avg_dom = get_market_avg_dom(data["best_zip"])
                 if avg_dom > 0:
                     ratio = best_dom / avg_dom
+                    dom_key = f"dom_{best_dom}d_vs_{avg_dom}d_avg"
                     if ratio >= 2:
                         db = round(12 * 0.55)  # 7
                         total_bonus += db
-                        breakdown["dom_vs_market"] = db
+                        breakdown[dom_key] = db
                     elif ratio >= 1.5:
                         db = round(8 * 0.55)   # 4
                         total_bonus += db
-                        breakdown["dom_vs_market"] = db
+                        breakdown[dom_key] = db
                     elif ratio >= 1.15:
                         db = round(5 * 0.55)   # 3
                         total_bonus += db
-                        breakdown["dom_vs_market"] = db
+                        breakdown[dom_key] = db
 
             # Price drop from original
-            if data["max_price_drop"] >= 15:
+            drop_pct = data["max_price_drop"]
+            if drop_pct >= 15:
                 pb = round(10 * 0.55)  # 6
                 total_bonus += pb
-                breakdown["price_drop"] = pb
-            elif data["max_price_drop"] >= 5:
+                breakdown[f"price_drop_{drop_pct:.0f}pct"] = pb
+            elif drop_pct >= 5:
                 pb = round(5 * 0.55)   # 3
                 total_bonus += pb
-                breakdown["price_drop"] = pb
+                breakdown[f"price_drop_{drop_pct:.0f}pct"] = pb
 
             # Overpriced vs market comps
-            if data["max_overpriced"] >= 15:
+            over_pct = data["max_overpriced"]
+            if over_pct >= 15:
                 ob = round(10 * 0.55)  # 6
                 total_bonus += ob
-                breakdown["overpriced"] = ob
-            elif data["max_overpriced"] >= 5:
+                breakdown[f"overpriced_{over_pct:.0f}pct"] = ob
+            elif over_pct >= 5:
                 ob = round(5 * 0.55)   # 3
                 total_bonus += ob
-                breakdown["overpriced"] = ob
+                breakdown[f"overpriced_{over_pct:.0f}pct"] = ob
 
             # Multi-vacancy
             multi_bonus = 0
