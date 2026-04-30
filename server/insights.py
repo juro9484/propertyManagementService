@@ -9,13 +9,15 @@ from db import get_cursor
 
 
 def get_market_avg_dom(zip_code):
-    """Compute average days on market for a zip code from our rental_listings DB."""
+    """Compute average days on market for a zip code from our rental_listings DB.
+    Excludes <15 day listings (platform cycling noise).
+    """
     with get_cursor() as cur:
         cur.execute("""
             SELECT COALESCE(AVG(days_on_market), 0)::int as avg_dom
             FROM rental_listings
             WHERE zip_code = %s
-            AND days_on_market BETWEEN 1 AND 180
+            AND days_on_market BETWEEN 15 AND 180
             AND fetched_at > NOW() - INTERVAL '10 days'
         """, [zip_code])
         return cur.fetchone()["avg_dom"] or 0
