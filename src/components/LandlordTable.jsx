@@ -285,8 +285,7 @@ function DetailPanel({ lead, onOutreach }) {
                 if (!label) {
                   if (k.startsWith('vacancy_')) label = `Vacant ${k.replace('vacancy_', '').replace('d', ' days').replace('_x', ' — ')}`
                   else if (k.startsWith('dom_')) {
-                    const m = k.match(/dom_(\d+)d_vs_(\d+)d_avg/)
-                    label = m ? `${m[1]} days on market (avg ${m[2]}d)` : k.replace(/_/g, ' ')
+                    label = k.replace(/_/g, ' ')
                   }
                   else if (k.startsWith('price_drop_')) {
                     const pct = k.replace('price_drop_', '').replace('pct', '')

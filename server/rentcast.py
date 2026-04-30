@@ -279,26 +279,6 @@ def match_listings_to_leads(county="boulder"):
             total_bonus += b
             breakdown[f"vacancy_{best_dom}d"] = b
 
-            # DOM vs market avg
-            if data["best_zip"]:
-                from insights import get_market_avg_dom
-                avg_dom = get_market_avg_dom(data["best_zip"])
-                if avg_dom > 0:
-                    ratio = best_dom / avg_dom
-                    dom_key = f"dom_{best_dom}d_vs_{avg_dom}d_avg"
-                    if ratio >= 2:
-                        db = round(12 * 0.55)  # 7
-                        total_bonus += db
-                        breakdown[dom_key] = db
-                    elif ratio >= 1.5:
-                        db = round(8 * 0.55)   # 4
-                        total_bonus += db
-                        breakdown[dom_key] = db
-                    elif ratio >= 1.15:
-                        db = round(5 * 0.55)   # 3
-                        total_bonus += db
-                        breakdown[dom_key] = db
-
             # Price drop from original
             drop_pct = data["max_price_drop"]
             if drop_pct >= 15:

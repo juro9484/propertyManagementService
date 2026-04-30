@@ -63,23 +63,17 @@ def generate_insights(metrics, lead_data):
     rent_est = metrics.get("rent_estimate", 0)
     current_price = metrics.get("current_price", 0)
 
-    # DOM vs market average
-    if dom_ratio >= 2 and market_avg > 0:
+    # Raw DOM signal (no market comparison — just how long it's been sitting)
+    if dom >= 45:
         insights.append({
-            "message": f"Property has been on the market {dom} days — significantly longer than the {market_avg}-day average for this area",
+            "message": f"Property has been on the market {dom} days",
             "severity": "high",
             "category": "vacancy",
         })
-    elif dom_ratio >= 1.5 and market_avg > 0:
+    elif dom >= 15:
         insights.append({
-            "message": f"Property has been listed {dom} days, longer than the typical {market_avg} days in this market",
+            "message": f"Property has been listed for {dom} days",
             "severity": "medium",
-            "category": "vacancy",
-        })
-    elif dom_ratio >= 1.15 and dom >= 15 and market_avg > 0:
-        insights.append({
-            "message": f"Property is taking slightly longer than average to lease ({dom} days vs {market_avg}-day average)",
-            "severity": "low",
             "category": "vacancy",
         })
 
