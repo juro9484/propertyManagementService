@@ -124,6 +124,11 @@ CREATE TABLE IF NOT EXISTS rental_listings (
   listed_date   DATE,
   status        TEXT,
   last_seen     TIMESTAMPTZ,
+  rent_estimate  INTEGER,            -- market rent from comps API
+  rent_range_low INTEGER,
+  rent_range_high INTEGER,
+  max_history_price INTEGER,         -- highest price in listing history
+  price_drop_pct NUMERIC(5,1),       -- % drop from max to current
   fetched_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

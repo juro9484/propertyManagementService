@@ -837,9 +837,14 @@ def generate_email(body: GenerateEmailRequest, request: Request):
         properties = cur.fetchall()
 
     import anthropic
+    from insights import get_insights_for_lead, build_llm_context
     client = anthropic.Anthropic(api_key=api_key)
 
     props_list = "\n".join(f"  - {p['address']}, {p['city']}" for p in properties) if properties else "  (address on file)"
+
+    # Generate data-driven insights for this lead
+    insight_obj = get_insights_for_lead(dict(lead))
+    insight_context = build_llm_context(insight_obj) if insight_obj else ""
 
     prompt = f"""Write a property management outreach letter for All County Property Management (Boulder County, Colorado).
 
@@ -848,29 +853,29 @@ TARGET OWNER:
 - Properties owned: {lead['property_count']}
 - Property addresses:
 {props_list}
-- Mailing address: {lead['mailing_address'] or 'N/A'}
 - Mailing state: {lead['mailing_state'] or 'CO'}
-- Score: {lead['score']}/22 (higher = stronger lead)
 - Badges: {', '.join(lead['badges'] or [])}
 
-KEY SIGNALS TO ADDRESS:
-{"- They are an LLC/entity — speak to their investment strategy and NOI optimization" if 'LLC' in (lead['badges'] or []) else ""}
-{"- Out-of-state owner — emphasize local boots-on-the-ground management, they can't be there daily" if 'OUT_OF_STATE' in (lead['badges'] or []) else ""}
-{"- Absentee owner — they don't live near their properties, management is a hassle" if 'ABSENTEE' in (lead['badges'] or []) else ""}
-{"- Portfolio owner (5+ properties) — managing multiple units is time-intensive, professional management scales" if 'PORTFOLIO' in (lead['badges'] or []) else ""}
-{"- Multi-property (3-4 units) — growing portfolio, now is the time to professionalize" if 'MULTI_PROP' in (lead['badges'] or []) else ""}
-{"- New owner — just acquired, may not have management in place yet" if 'NEW_OWNER' in (lead['badges'] or []) else ""}
+{"- They are an LLC/entity" if 'LLC' in (lead['badges'] or []) else ""}
+{"- Out-of-state owner" if 'OUT_OF_STATE' in (lead['badges'] or []) else ""}
+{"- Absentee owner" if 'ABSENTEE' in (lead['badges'] or []) else ""}
+{"- Portfolio owner (5+ properties)" if 'PORTFOLIO' in (lead['badges'] or []) else ""}
+{"- New owner — just acquired" if 'NEW_OWNER' in (lead['badges'] or []) else ""}
+
+{insight_context}
 
 TONE: {body.tone}
 
 REQUIREMENTS:
-- Keep it SHORT — under 150 words. 3-4 short paragraphs max.
-- Reference ONE specific property address and their situation
-- ONE concrete value prop (pick the most relevant for their situation)
-- End with a clear, simple call to action
+- Under 90 words. 2-3 short paragraphs.
+- If there are situation insights above, lead with ONE specific observation from the data
+- Reference a specific property address
+- Make ONE helpful suggestion based on their situation
+- End with a question (soft CTA)
 - Sign off as [Your Name], All County Property Management — Boulder County
 - No subject line — just the letter body
-- Conversational, not corporate. Short sentences."""
+- Sound like a neighbor who happens to manage properties, not a salesperson
+- NEVER say "I noticed" or "we offer property management" — be natural"""
 
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",

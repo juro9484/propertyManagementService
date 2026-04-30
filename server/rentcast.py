@@ -82,16 +82,26 @@ def store_listings(listings):
 
     with get_cursor(commit=True) as cur:
         for l in listings:
+            # Compute max history price and price drop
+            history = l.get("history", {})
+            prices = [e.get("price", 0) for e in history.values() if e.get("price")]
+            max_hist_price = max(prices) if prices else (l.get("price") or 0)
+            current_price = l.get("price") or 0
+            price_drop = round((max_hist_price - current_price) / max_hist_price * 100, 1) if max_hist_price > current_price else 0
+
             cur.execute("""
                 INSERT INTO rental_listings (id, address, city, state, zip_code, county,
                     price, bedrooms, bathrooms, sqft, property_type,
-                    days_on_market, listed_date, status, last_seen, fetched_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    days_on_market, listed_date, status, last_seen,
+                    max_history_price, price_drop_pct, fetched_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (id) DO UPDATE SET
                     price = EXCLUDED.price,
                     days_on_market = EXCLUDED.days_on_market,
                     status = EXCLUDED.status,
                     last_seen = EXCLUDED.last_seen,
+                    max_history_price = EXCLUDED.max_history_price,
+                    price_drop_pct = EXCLUDED.price_drop_pct,
                     fetched_at = NOW()
             """, [
                 l.get("id"),
@@ -100,7 +110,7 @@ def store_listings(listings):
                 l.get("state", ""),
                 l.get("zipCode", ""),
                 l.get("county", ""),
-                l.get("price"),
+                current_price,
                 l.get("bedrooms"),
                 l.get("bathrooms"),
                 l.get("squareFootage"),
@@ -109,6 +119,8 @@ def store_listings(listings):
                 l.get("listedDate", "")[:10] if l.get("listedDate") else None,
                 l.get("status"),
                 l.get("lastSeenDate"),
+                max_hist_price,
+                price_drop,
             ])
 
     print(f"[RENTCAST] Stored {len(listings)} listings")
@@ -149,7 +161,8 @@ def match_listings_to_leads(county="boulder"):
     """
     with get_cursor() as cur:
         cur.execute("""
-            SELECT address, city, days_on_market, price
+            SELECT address, city, zip_code, days_on_market, price,
+                   rent_estimate, max_history_price, price_drop_pct
             FROM rental_listings
             WHERE days_on_market BETWEEN 1 AND 180
             AND fetched_at > NOW() - INTERVAL '10 days'
@@ -160,11 +173,10 @@ def match_listings_to_leads(county="boulder"):
         print(f"[RENTCAST] No listings to match for {county}")
         return 0
 
-    # Build two lookups:
-    # 1. Full address (with unit) → DOM  (for apartment matches)
-    # 2. Base address (no unit) → DOM    (for house matches — only when listing has no unit)
-    full_map = {}    # "830 20TH ST APT 106" → DOM
-    house_map = {}   # "830 MAIN ST" → DOM  (only listings WITHOUT units)
+    # Build lookups — full address and house-only maps
+    # Each stores: {addr: {dom, zip, price_drop, overpriced_pct}}
+    full_map = {}
+    house_map = {}
 
     for l in listings:
         addr = (l["address"] or "").strip()
@@ -175,11 +187,28 @@ def match_listings_to_leads(county="boulder"):
         full = _full_address(addr)
         base = _base_address(addr)
 
-        full_map[full] = max(full_map.get(full, 0), dom)
+        listing_info = {
+            "dom": dom,
+            "zip": l.get("zip_code", ""),
+            "price_drop": float(l.get("price_drop_pct") or 0),
+            "rent_estimate": l.get("rent_estimate") or 0,
+            "price": l.get("price") or 0,
+        }
+        # Compute overpriced %
+        if listing_info["rent_estimate"] > 0 and listing_info["price"] > 0:
+            listing_info["overpriced_pct"] = round(
+                (listing_info["price"] - listing_info["rent_estimate"]) / listing_info["rent_estimate"] * 100, 1
+            )
+        else:
+            listing_info["overpriced_pct"] = 0
 
-        # Only add to house_map if listing has no unit
+        # Keep the worst (highest DOM) listing per address
+        if full not in full_map or dom > full_map[full]["dom"]:
+            full_map[full] = listing_info
+
         if not _has_unit(addr):
-            house_map[base] = max(house_map.get(base, 0), dom)
+            if base not in house_map or dom > house_map[base]["dom"]:
+                house_map[base] = listing_info
 
     print(f"[RENTCAST] {len(full_map)} full addresses, {len(house_map)} house addresses to match")
 
@@ -203,6 +232,9 @@ def match_listings_to_leads(county="boulder"):
                     "doms": [],
                     "total_props": p["property_count"] or 1,
                     "is_new": p["is_new_owner"],
+                    "best_zip": "",
+                    "max_price_drop": 0,
+                    "max_overpriced": 0,
                 }
 
             prop_addr = (p["address"] or "").strip()
@@ -210,20 +242,19 @@ def match_listings_to_leads(county="boulder"):
             prop_base = _base_address(prop_addr)
             prop_has_unit = _has_unit(prop_addr)
 
-            # Try full address match first (works for both houses and apartments with units)
-            dom = full_map.get(prop_full, 0)
+            # Match
+            info = full_map.get(prop_full)
+            if not info and not prop_has_unit:
+                info = house_map.get(prop_base)
 
-            # If no full match and property has NO unit, try house map
-            if dom == 0 and not prop_has_unit:
-                dom = house_map.get(prop_base, 0)
+            if info and 15 <= info["dom"] <= 180:
+                lead_data[lid]["doms"].append(info["dom"])
+                if info["zip"]:
+                    lead_data[lid]["best_zip"] = info["zip"]
+                lead_data[lid]["max_price_drop"] = max(lead_data[lid]["max_price_drop"], info["price_drop"])
+                lead_data[lid]["max_overpriced"] = max(lead_data[lid]["max_overpriced"], info["overpriced_pct"])
 
-            # If property HAS a unit but no full match — don't fall back to building level
-            # (can't tell which unit the listing is for)
-
-            if 15 <= dom <= 180:
-                lead_data[lid]["doms"].append(dom)
-
-        # Calculate vacancy bonus with multi-vacancy and ratio check
+        # Calculate total struggle bonus
         for lead_id, data in lead_data.items():
             doms = sorted(data["doms"], reverse=True)
             if not doms:
@@ -234,34 +265,74 @@ def match_listings_to_leads(county="boulder"):
             vacant_count = len(doms)
             vacancy_ratio = vacant_count / max(total_props, 1)
 
-            # Base bonus from worst (longest) vacancy
+            breakdown = {}
+            total_bonus = 0
+
+            # DOM base
             best_dom = doms[0]
             if 15 <= best_dom < 45:
-                base = round(12 * 0.55)    # 7
+                b = round(12 * 0.55)  # 7
             elif 45 <= best_dom < 90:
-                base = round(25 * 0.55)    # 14
+                b = round(25 * 0.55)  # 14
             else:
-                base = round(15 * 0.55)    # 8
+                b = round(15 * 0.55)  # 8
+            total_bonus += b
+            breakdown[f"vacancy_{best_dom}d"] = b
 
-            # Multi-vacancy bonus: +4, +4, +2 (capped at +10)
+            # DOM vs market avg
+            if data["best_zip"]:
+                from insights import get_market_avg_dom
+                avg_dom = get_market_avg_dom(data["best_zip"])
+                if avg_dom > 0:
+                    ratio = best_dom / avg_dom
+                    if ratio >= 2:
+                        db = round(12 * 0.55)  # 7
+                        total_bonus += db
+                        breakdown["dom_vs_market"] = db
+                    elif ratio >= 1.5:
+                        db = round(8 * 0.55)   # 4
+                        total_bonus += db
+                        breakdown["dom_vs_market"] = db
+                    elif ratio >= 1.15:
+                        db = round(5 * 0.55)   # 3
+                        total_bonus += db
+                        breakdown["dom_vs_market"] = db
+
+            # Price drop from original
+            if data["max_price_drop"] >= 15:
+                pb = round(10 * 0.55)  # 6
+                total_bonus += pb
+                breakdown["price_drop"] = pb
+            elif data["max_price_drop"] >= 5:
+                pb = round(5 * 0.55)   # 3
+                total_bonus += pb
+                breakdown["price_drop"] = pb
+
+            # Overpriced vs market comps
+            if data["max_overpriced"] >= 15:
+                ob = round(10 * 0.55)  # 6
+                total_bonus += ob
+                breakdown["overpriced"] = ob
+            elif data["max_overpriced"] >= 5:
+                ob = round(5 * 0.55)   # 3
+                total_bonus += ob
+                breakdown["overpriced"] = ob
+
+            # Multi-vacancy
             multi_bonus = 0
             if vacancy_ratio > 0.5 and not is_new:
-                # Suspicious — likely stale data. No multi-bonus.
                 multi_bonus = 0
             else:
                 extra = vacant_count - 1
                 if extra >= 1: multi_bonus += 4
                 if extra >= 2: multi_bonus += 4
                 if extra >= 3: multi_bonus += 2
-                # Cap at 10
                 multi_bonus = min(multi_bonus, 10)
+            if multi_bonus > 0:
+                total_bonus += multi_bonus
+                breakdown["multi_vacancy"] = multi_bonus
 
-            total_bonus = base + multi_bonus
-
-            detail = f"vacancy_{best_dom}d"
-            if vacant_count > 1:
-                detail += f"_x{vacant_count}"
-
+            import json as json_mod
             cur.execute("""
                 UPDATE leads SET
                     score = score + %s,
@@ -270,7 +341,7 @@ def match_listings_to_leads(county="boulder"):
                     updated_at = NOW()
                 WHERE id = %s
                 AND NOT ('VACANT' = ANY(badges))
-            """, [total_bonus, f'{{"{detail}": {total_bonus}}}', lead_id])
+            """, [total_bonus, json_mod.dumps(breakdown), lead_id])
 
             if cur.rowcount > 0:
                 matched += 1
@@ -279,8 +350,81 @@ def match_listings_to_leads(county="boulder"):
     return matched
 
 
+def fetch_rent_estimates(api_key, county="boulder"):
+    """Fetch rent estimates for vacant listings that don't have one yet.
+    Only calls API for listings matched to leads (saves credits).
+    """
+    with get_cursor() as cur:
+        cur.execute("""
+            SELECT rl.id, rl.address, rl.city, rl.state, rl.zip_code,
+                   rl.bedrooms, rl.property_type, rl.price
+            FROM rental_listings rl
+            WHERE rl.rent_estimate IS NULL
+            AND rl.days_on_market BETWEEN 1 AND 180
+            AND rl.fetched_at > NOW() - INTERVAL '10 days'
+            AND rl.price IS NOT NULL
+            AND EXISTS (
+                SELECT 1 FROM lead_properties lp
+                JOIN leads l ON l.id = lp.lead_id
+                WHERE l.county = %s
+                AND UPPER(REGEXP_REPLACE(lp.address, '\s*(#|APT|UNIT|STE|SUITE)\s*\S*$', ''))
+                  = UPPER(REGEXP_REPLACE(rl.address, '\s*(#|Apt|Unit|Ste|Suite)\s*\S*$', ''))
+            )
+            LIMIT 50
+        """, [county])
+        to_estimate = cur.fetchall()
+
+    if not to_estimate:
+        print(f"[RENTCAST] No listings need rent estimates for {county}")
+        return 0
+
+    estimated = 0
+    calls = 0
+    for listing in to_estimate:
+        addr = f"{listing['address']}, {listing['city']}, {listing['state']} {listing['zip_code']}"
+        prop_type = listing.get("property_type") or "Apartment"
+        beds = listing.get("bedrooms") or 2
+
+        try:
+            resp = httpx.get(
+                f"{RENTCAST_BASE}/avm/rent/long-term",
+                headers={"X-Api-Key": api_key},
+                params={
+                    "address": addr,
+                    "propertyType": prop_type,
+                    "bedrooms": beds,
+                    "compCount": 5,
+                },
+                timeout=15,
+            )
+            calls += 1
+
+            if resp.status_code == 200:
+                data = resp.json()
+                rent_est = data.get("rent")
+                if rent_est:
+                    with get_cursor(commit=True) as cur:
+                        cur.execute("""
+                            UPDATE rental_listings SET
+                                rent_estimate = %s,
+                                rent_range_low = %s,
+                                rent_range_high = %s
+                            WHERE id = %s
+                        """, [rent_est, data.get("rentRangeLow"), data.get("rentRangeHigh"), listing["id"]])
+                    estimated += 1
+            elif resp.status_code == 429:
+                print(f"[RENTCAST] Rate limited during estimates — stopping")
+                break
+
+        except Exception as e:
+            print(f"[RENTCAST] Estimate failed for {addr}: {e}")
+
+    print(f"[RENTCAST] Fetched {estimated} rent estimates ({calls} API calls)")
+    return calls
+
+
 def run_rentcast(county="boulder"):
-    """Full weekly flow: fetch listings → store → match to leads."""
+    """Full weekly flow: fetch listings → store → match → get comps for vacant."""
     api_key = os.environ.get("RENTCAST_API_KEY", "")
     if not api_key:
         print("[RENTCAST] No RENTCAST_API_KEY set — skipping")
@@ -290,6 +434,14 @@ def run_rentcast(county="boulder"):
     listings, calls = fetch_listings(api_key, county)
     store_listings(listings)
     matched = match_listings_to_leads(county)
+
+    # Fetch rent estimates for matched vacant listings (extra API calls)
+    est_calls = fetch_rent_estimates(api_key, county)
+    calls += est_calls
+
+    # Re-match to pick up overpriced signals from new estimates
+    if est_calls > 0:
+        matched = match_listings_to_leads(county)
 
     return {
         "ok": True,
