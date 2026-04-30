@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS leads (
 
   -- workflow
   status        TEXT NOT NULL DEFAULT 'new'
-                CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested')),
+                CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested', 'dismissed')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 

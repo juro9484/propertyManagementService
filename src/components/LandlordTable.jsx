@@ -71,6 +71,7 @@ const STATUS_CFG = {
   meeting:          { label: 'Meeting',          bg: 'var(--b-purple-bg)', tx: 'var(--b-purple-tx)',bd: 'var(--b-purple-bd)' },
   converted:        { label: 'Converted',        bg: 'var(--b-green-bg)',  tx: 'var(--b-green-tx)', bd: 'var(--b-green-bd)'  },
   not_interested:   { label: 'Not Interested',   bg: 'var(--b-red-bg)',    tx: 'var(--b-red-tx)',   bd: 'var(--b-red-bd)'    },
+  dismissed:        { label: 'Dismissed',        bg: 'var(--bd-s)',        tx: 'var(--tx-4)',       bd: 'var(--bd)'          },
 }
 const STATUS_CYCLE = ['new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested']
 
@@ -407,7 +408,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
         await fetch(`${API_BASE}/api/leads/${leadId}/status`, {
           method: 'PATCH',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ status: 'not_interested' }),
+          body: JSON.stringify({ status: 'dismissed' }),
         })
         if (onStatusChangeParent) onStatusChangeParent()
       } catch (e) { console.error('Dismiss failed', e) }
@@ -502,6 +503,7 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
               <option value="meeting">Meeting</option>
               <option value="converted">Converted</option>
               <option value="not_interested">Not Interested</option>
+              <option value="dismissed">Dismissed</option>
             </select>
           </div>
 

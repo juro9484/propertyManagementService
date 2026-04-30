@@ -342,7 +342,7 @@ def list_leads(
             # Only enriched new leads — no point showing unenriched ones
             conditions.append("l.status = 'new' AND l.enriched_at IS NOT NULL")
         elif status == "pipeline":
-            conditions.append("l.status IN ('contacted', 'follow_up', 'meeting')")
+            conditions.append("l.status IN ('contacted', 'follow_up', 'meeting', 'converted', 'not_interested', 'dismissed')")
         elif status == "closed":
             conditions.append("l.status IN ('converted', 'not_interested')")
         else:
@@ -443,7 +443,7 @@ def get_lead(lead_id: int):
 
 @app.patch("/api/leads/{lead_id}/status")
 def update_lead_status(lead_id: int, body: StatusUpdate, request: Request):
-    valid = {"new", "contacted", "follow_up", "meeting", "converted", "not_interested"}
+    valid = {"new", "contacted", "follow_up", "meeting", "converted", "not_interested", "dismissed"}
     if body.status not in valid:
         raise HTTPException(400, f"Invalid status. Must be one of: {valid}")
     user = getattr(request.state, "user", {})

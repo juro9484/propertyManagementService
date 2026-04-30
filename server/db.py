@@ -49,7 +49,7 @@ def init_db():
                     CHECK (status IN ('draft', 'queued', 'sent', 'delivered', 'opened', 'replied', 'bounced', 'failed'));
                 ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check;
                 ALTER TABLE leads ADD CONSTRAINT leads_status_check
-                    CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested'));
+                    CHECK (status IN ('new', 'contacted', 'follow_up', 'meeting', 'converted', 'not_interested', 'dismissed'));
                 ALTER TABLE leads ADD COLUMN IF NOT EXISTS new_owner_since DATE;
                 ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone_dnc BOOLEAN DEFAULT FALSE;
                 ALTER TABLE leads ADD COLUMN IF NOT EXISTS email_status TEXT DEFAULT 'unverified';
