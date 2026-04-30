@@ -133,8 +133,13 @@ function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusO
           <div style={{ fontSize: '11px', color: 'var(--tx-4)', marginTop: '2px' }}>
             {lead.city}{lead.property_count > 1 ? ` · ${lead.property_count} props` : ''}
           </div>
+          {lead.company && lead.company !== lead.owner_name && (
+            <div style={{ fontSize: '10px', color: 'var(--tx-2)', marginTop: '2px', fontWeight: 500 }}>
+              {lead.company}
+            </div>
+          )}
           {(lead.email || lead.phone) && (
-            <div style={{ fontSize: '10px', color: 'var(--tx-3)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '10px', color: 'var(--tx-3)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {lead.email && <span style={{ color: 'var(--b-green-tx)' }}>{lead.email}</span>}
               {lead.email && lead.phone && <span style={{ color: 'var(--tx-4)' }}> · </span>}
               {lead.phone && <span style={{ color: 'var(--b-blue-tx)' }}>{lead.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}</span>}
@@ -204,7 +209,12 @@ function DetailPanel({ lead, onOutreach }) {
         </div>
       </div>
 
-      {/* Contact info + badges row */}
+      {/* Contact person + info row */}
+      {lead.company && lead.company !== lead.owner_name && (
+        <p style={{ fontSize: '12px', color: 'var(--tx-2)', margin: '0 0 4px' }}>
+          Contact: <span style={{ fontWeight: 600, color: 'var(--tx-1)' }}>{lead.company}</span>
+        </p>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
         {lead.email && (
           <a href={`mailto:${lead.email}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--b-green-tx)', backgroundColor: 'var(--b-green-bg)', border: '1px solid var(--b-green-bd)', borderRadius: '4px', padding: '3px 10px', textDecoration: 'none' }}>
