@@ -342,7 +342,9 @@ def list_leads(
             # Only enriched new leads — no point showing unenriched ones
             conditions.append("l.status = 'new' AND l.enriched_at IS NOT NULL")
         elif status == "pipeline":
-            conditions.append("l.status IN ('contacted', 'follow_up', 'meeting', 'converted', 'not_interested', 'dismissed')")
+            conditions.append("l.status IN ('contacted', 'follow_up', 'meeting', 'converted', 'not_interested')")
+        elif status == "discarded":
+            conditions.append("l.status = 'dismissed'")
         elif status == "closed":
             conditions.append("l.status IN ('converted', 'not_interested')")
         else:

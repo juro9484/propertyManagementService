@@ -12,6 +12,7 @@ import { sampleLandlordData } from './sampleData'
 const TABS = [
   { label: 'Leads' },
   { label: 'Pipeline' },
+  { label: 'Discarded' },
   { label: 'Property Map' },
   { label: 'Activity', adminOnly: true },
   { label: 'Settings', adminOnly: true },
@@ -24,6 +25,7 @@ export default function App() {
   const [token, setToken]               = useState(() => localStorage.getItem('acpm_token'))
   const [landlordData, setLandlordData] = useState(null)
   const [pipelineData, setPipelineData] = useState(null)
+  const [discardedData, setDiscardedData] = useState(null)
   const [loading, setLoading]           = useState(true)
   const [usingMock, setUsingMock]       = useState(false)
   const [activeTab, setActiveTab]       = useState(0)
@@ -62,10 +64,11 @@ export default function App() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // Fetch fresh leads (status=new) and pipeline leads (status!=new) in parallel
-      const [newRes, pipeRes] = await Promise.all([
+      // Fetch leads, pipeline, and discarded in parallel
+      const [newRes, pipeRes, discRes] = await Promise.all([
         fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&county=${county}&status=new`, { headers: getAuthHeaders() }),
         fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&county=${county}&status=pipeline`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/leads?per_page=200&sort=score_desc&county=${county}&status=discarded`, { headers: getAuthHeaders() }),
       ])
 
       if (newRes.status === 401) { handleLogout(); return }
@@ -75,6 +78,9 @@ export default function App() {
       }
       if (pipeRes.ok) {
         setPipelineData(reshapeLeads(await pipeRes.json()))
+      }
+      if (discRes.ok) {
+        setDiscardedData(reshapeLeads(await discRes.json()))
       }
       setUsingMock(false)
       setLoading(false)
@@ -109,9 +115,10 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />
   }
 
-  const leads         = landlordData?.leads ?? []
-  const pipelineLeads = pipelineData?.leads ?? []
-  const allLeads      = [...leads, ...pipelineLeads]
+  const leads          = landlordData?.leads ?? []
+  const pipelineLeads  = pipelineData?.leads ?? []
+  const discardedLeads = discardedData?.leads ?? []
+  const allLeads       = [...leads, ...pipelineLeads]
   const enrichedCount = allLeads.filter(l => l.email || l.phone).length
   const avgScore = leads.length
     ? (leads.reduce((s, l) => s + l.score, 0) / leads.length).toFixed(1)
@@ -208,7 +215,7 @@ export default function App() {
                 }}
               >
                 {tab.label}
-                {(i === 0 || i === 1) && (
+                {(i === 0 || i === 1 || i === 2) && (
                   <span style={{
                     marginLeft: '8px',
                     fontSize: '11px',
@@ -218,7 +225,7 @@ export default function App() {
                     backgroundColor: activeTab === i ? 'var(--gold-bg)' : 'var(--bd-s)',
                     color: activeTab === i ? 'var(--gold)' : 'var(--tx-4)',
                   }}>
-                    {i === 0 ? (landlordData?.total_records_processed ?? leads.length) : (pipelineData?.total_records_processed ?? pipelineLeads.length)}
+                    {i === 0 ? (landlordData?.total_records_processed ?? leads.length) : i === 1 ? (pipelineData?.total_records_processed ?? pipelineLeads.length) : (discardedData?.total_records_processed ?? discardedLeads.length)}
                   </span>
                 )}
               </button>
@@ -242,12 +249,15 @@ export default function App() {
               <LandlordTable leads={pipelineLeads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} onStatusChange={loadData} />
             )}
             {activeTab === 2 && (
+              <LandlordTable leads={discardedLeads} onOutreach={lead => setModal({ lead, type: 'landlord' })} theme={theme} county={county} onStatusChange={loadData} />
+            )}
+            {activeTab === 3 && (
               <PropertyMap leads={allLeads} theme={theme} county={county} />
             )}
-            {activeTab === 3 && user?.role === 'admin' && (
+            {activeTab === 4 && user?.role === 'admin' && (
               <ActivityLog />
             )}
-            {activeTab === 4 && user?.role === 'admin' && (
+            {activeTab === 5 && user?.role === 'admin' && (
               <UserManagement />
             )}
           </>
