@@ -61,8 +61,8 @@ export default function App() {
     leads: apiData.leads.map((l, i) => ({ ...l, rank: i + 1, folio: l.primary_folio || l.id })),
   })
 
-  const loadData = async () => {
-    setLoading(true)
+  const loadData = async (quiet = false) => {
+    if (!quiet) setLoading(true)
     try {
       // Fetch leads, pipeline, and discarded in parallel
       const [newRes, pipeRes, discRes] = await Promise.all([

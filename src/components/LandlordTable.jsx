@@ -106,7 +106,6 @@ function Badge({ type }) {
 function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusOverride, displayRank }) {
   const status    = statusOverride ?? lead.status ?? 'new'
   const sc        = STATUS_CFG[status] ?? STATUS_CFG.new
-  const nextStatus = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
   const scoreColor = pinColor(lead.score)
 
   return (
@@ -164,18 +163,20 @@ function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusO
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
         {lead.badges?.slice(0, 3).map(b => <Badge key={b} type={b} />)}
-        <button
-          onClick={e => { e.stopPropagation(); onStatusChange(lead.id, nextStatus) }}
-          title={`Click to mark as "${nextStatus}"`}
+        <select
+          value={status}
+          onClick={e => e.stopPropagation()}
+          onChange={e => { e.stopPropagation(); onStatusChange(lead.id, e.target.value) }}
           style={{
-            marginLeft: 'auto', display: 'inline-flex', alignItems: 'center',
-            padding: '2px 8px', borderRadius: '3px', fontSize: '10px', fontWeight: 500,
+            marginLeft: 'auto', padding: '2px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 500,
             cursor: 'pointer', backgroundColor: sc.bg, color: sc.tx,
-            border: `1px solid ${sc.bd}`, whiteSpace: 'nowrap',
+            border: `1px solid ${sc.bd}`, appearance: 'auto',
           }}
         >
-          {sc.label}
-        </button>
+          {STATUS_CYCLE.map(s => (
+            <option key={s} value={s}>{STATUS_CFG[s]?.label || s}</option>
+          ))}
+        </select>
       </div>
     </div>
   )
@@ -393,7 +394,10 @@ export default function LandlordTable({ leads, onOutreach, theme, county, onStat
         headers: getAuthHeaders(),
         body: JSON.stringify({ status: next }),
       })
-      if (onStatusChangeParent) setTimeout(onStatusChangeParent, 300)
+      // Quiet background refresh after 2 seconds — no loading spinner
+      if (onStatusChangeParent) setTimeout(() => {
+        onStatusChangeParent(true) // true = quiet refresh
+      }, 2000)
     } catch (e) { console.error('Status update failed', e) }
   }
 
