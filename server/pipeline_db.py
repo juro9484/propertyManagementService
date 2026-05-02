@@ -253,11 +253,11 @@ def _run_pipeline_inner(county: str, run_id: int):
     records = [r for r in all_records if r.get("account_type", "").lower() in RESIDENTIAL_TYPES]
     print(f"[PIPELINE] Loaded {len(all_records)} records, {len(records)} residential from {csv_path}")
 
-    # Detect new owners by comparing against current DB state
+    # Detect new owners BEFORE upserting (compare today's CSV vs yesterday's DB)
     new_owner_folios = _detect_new_owners_from_db(records, county)
     print(f"[PIPELINE] {len(new_owner_folios)} new-owner events")
 
-    # Upsert raw properties into DB
+    # THEN upsert properties (DB now matches today's CSV for tomorrow's comparison)
     _upsert_properties(records, county)
 
     # Group by owner, score, and upsert leads
