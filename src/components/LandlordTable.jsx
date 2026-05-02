@@ -92,10 +92,11 @@ function Badge({ type }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
-      padding: '1px 6px', borderRadius: '3px',
-      fontSize: '10px', fontWeight: 500,
+      padding: '2px 7px', borderRadius: '10px',
+      fontSize: '9px', fontWeight: 600, letterSpacing: '0.03em',
       backgroundColor: c.bg, color: c.tx,
-      border: `1px solid ${c.bd}`, whiteSpace: 'nowrap',
+      border: 'none', whiteSpace: 'nowrap',
+      textTransform: 'uppercase',
     }}>
       {c.label}
     </span>
@@ -146,37 +147,42 @@ function LeadCard({ lead, selected, onSelect, onStatusChange, onDismiss, statusO
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flexShrink: 0 }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
-            <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{displayRank}</div>
-          </div>
-          <button
-            onClick={e => { e.stopPropagation(); onDismiss(lead.id) }}
-            title="Dismiss lead"
-            style={{ padding: '2px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tx-4)', lineHeight: 1, opacity: 0.4, fontSize: '16px' }}
-          >
-            ×
-          </button>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: scoreColor, lineHeight: 1 }}>{lead.score}</div>
+          <div style={{ fontSize: '10px', color: 'var(--tx-4)', marginTop: '2px' }}>#{displayRank}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
         {lead.badges?.slice(0, 3).map(b => <Badge key={b} type={b} />)}
-        <select
-          value={status}
-          onClick={e => e.stopPropagation()}
-          onChange={e => { e.stopPropagation(); onStatusChange(lead.id, e.target.value) }}
-          style={{
-            marginLeft: 'auto', padding: '2px 6px', borderRadius: '3px', fontSize: '10px', fontWeight: 500,
-            cursor: 'pointer', backgroundColor: sc.bg, color: sc.tx,
-            border: `1px solid ${sc.bd}`, appearance: 'auto',
-          }}
-        >
-          {STATUS_CYCLE.map(s => (
-            <option key={s} value={s}>{STATUS_CFG[s]?.label || s}</option>
-          ))}
-        </select>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <select
+            value={status}
+            onClick={e => e.stopPropagation()}
+            onChange={e => { e.stopPropagation(); onStatusChange(lead.id, e.target.value) }}
+            className="field"
+            style={{
+              padding: '3px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
+              cursor: 'pointer', backgroundColor: sc.bg, color: sc.tx,
+              border: `1px solid ${sc.bd}`,
+            }}
+          >
+            {STATUS_CYCLE.map(s => (
+              <option key={s} value={s}>{STATUS_CFG[s]?.label || s}</option>
+            ))}
+          </select>
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss(lead.id) }}
+            title="Discard lead"
+            style={{
+              padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 500,
+              cursor: 'pointer', color: 'var(--tx-4)', backgroundColor: 'var(--bg-raised)',
+              border: '1px solid var(--bd)', display: 'inline-flex', alignItems: 'center', gap: '2px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   )
