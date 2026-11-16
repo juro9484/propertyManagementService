@@ -8,3 +8,5 @@ data/*.csv
 .DS_Store
 *.log
 server/.venv/
+CLAUDE.md
+SIMON_GUIDE.md
